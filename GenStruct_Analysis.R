@@ -46,6 +46,43 @@ unique(db$run_id) #runs that I'll
 # i don't have IMP_NEXTSEQ02_300522...
 # no SMC2_run3?
 
+# 1a.- complete run_id column with data from the actual runs
+
+result_df <- data.frame(nida = character(), folder_name = character(), stringsAsFactors = FALSE)
+directory_path <- "../results_v0.1.8_RESMARKERS_FIX/"
+
+# Iterate through the folders
+for (folder_name in list.dirs(directory_path, full.names = FALSE)) {
+
+  file_path <- file.path(directory_path, folder_name, "amplicon_coverage.txt")
+  
+  # Read the contents of /quality_report/amplicon_stats.txt
+  if (file.exists(file_path)) {
+    sample_coverage_content <- readLines(file_path)
+    
+    # Truncate each line after the first tab (\t) and return unique values and edit nida format to match the one from the db
+    truncated_values <- unique(sapply(strsplit(sample_coverage_content, "\t"), function(x) x[1]))
+    truncated_values <- gsub("_S.*$", "", truncated_values)
+    truncated_values <- gsub("_", ".", truncated_values)
+    truncated_values <-  gsub("N", "", truncated_values)
+    
+    # Extract NIDA2 from runs using grep
+    nida_values <- grep(paste(db$NIDA2, collapse = "|"), truncated_values, value = TRUE)
+    
+    # Create a data frame with NIDA2 and folder_name
+    if (length(nida_values) > 0) {
+      temp_df <- data.frame(NIDA2 = nida_values, NEW_run_id = folder_name, stringsAsFactors = FALSE)
+      
+      # Append the results to the main data frame
+      result_df <- rbind(result_df, temp_df)
+    }
+  }
+}
+
+
+
+
+
 # 2.- genomic data from all runs (allele data, resmarkers, haplos?)
 
 
