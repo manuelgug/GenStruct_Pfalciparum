@@ -153,25 +153,33 @@ names(allele_data_list) <- runs
 # 3.- calculate MOI, eMOI and relatedness for each run
 #######################################################
 
-# set MOIRE parameters
-dat_filter <- moire::load_long_form_data(subsetted_df)
-burnin <- 1e4
-num_samples <- 1e4
-pt_chains <- seq(1, .5, length.out = 20)
+# Iterate over each element in allele_data_list
+for (i in seq_along(allele_data_list)) {
+  run <- names(allele_data_list)[i]
+  df <- allele_data_list[[i]]
+  
+  # set MOIRE parameters
+  dat_filter <- moire::load_long_form_data(df)
+  burnin <- 1e4
+  num_samples <- 1e4
+  pt_chains <- seq(1, .5, length.out = 20)
+  
+  # run moire
+  mcmc_results <- moire::run_mcmc(
+    dat_filter, is_missing = dat_filter$is_missing,
+    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+    thin = 10
+  )
+  
+  # checkpoint
+  saveRDS(mcmc_results, paste0(run, "_MOIRE-RESULTS.RDS"))
+}
 
-#run moire
-mcmc_results <- moire::run_mcmc(
-  dat_filter, is_missing = dat_filter$is_missing,
-  verbose = T, burnin = burnin, samples_per_chain = num_samples,
-  pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-  thin = 10
-)
 
-#checkpoint
-saveRDS(mcmc_results, paste0(opt$output_prefix, "_MOIRE-RESULTS.RDS"))
 
 #resume checkpoint
-mcmc_results <- readRDS(paste0(opt$output_prefix, "_MOIRE-RESULTS.RDS"))
+mcmc_results <- readRDS(paste0(run, "_MOIRE-RESULTS.RDS"))
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
