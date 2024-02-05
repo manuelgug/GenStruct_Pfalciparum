@@ -1,5 +1,7 @@
 
 library(haven)
+library(progress)
+library(fs)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -48,13 +50,23 @@ unique(db$run_id) #runs that I'll
 
 # 1a.- complete run_id column with data from the actual runs
 
-result_df <- data.frame(nida = character(), folder_name = character(), stringsAsFactors = FALSE)
+# Initialize an empty data frame to store the results
+result_df <- data.frame(NIDA2 = character(), NEW_run_id = character(), stringsAsFactors = FALSE)
+
 directory_path <- "../results_v0.1.8_RESMARKERS_FIX/"
 
-# Iterate through the folders
-for (folder_name in list.dirs(directory_path, full.names = FALSE)) {
+# Create a progress bar
+pb <- progress_bar$new(
+  format = "[:bar] :percent ETA: :eta",
+  total = length(dir_ls(path = directory_path, regexp = "_RESULTS_v0.1.8$"))
+)
 
-  file_path <- file.path(directory_path, folder_name, "amplicon_coverage.txt")
+# Iterate through the folders ending with _RESULTS_v0.1.8
+for (folder_path in dir_ls(path = directory_path, regexp = "_RESULTS_v0.1.8$")) {
+  pb$tick()  # Update progress bar
+  
+  folder_name <- path_file(folder_path)
+  file_path <- file.path(folder_path, "amplicon_coverage.txt")
   
   # Read the contents of /quality_report/amplicon_stats.txt
   if (file.exists(file_path)) {
@@ -64,7 +76,8 @@ for (folder_name in list.dirs(directory_path, full.names = FALSE)) {
     truncated_values <- unique(sapply(strsplit(sample_coverage_content, "\t"), function(x) x[1]))
     truncated_values <- gsub("_S.*$", "", truncated_values)
     truncated_values <- gsub("_", ".", truncated_values)
-    truncated_values <-  gsub("N", "", truncated_values)
+    truncated_values <- gsub("-", ".", truncated_values)
+    truncated_values <- gsub("N", "", truncated_values)
     
     # Extract NIDA2 from runs using grep
     nida_values <- grep(paste(db$NIDA2, collapse = "|"), truncated_values, value = TRUE)
@@ -79,9 +92,21 @@ for (folder_name in list.dirs(directory_path, full.names = FALSE)) {
   }
 }
 
+result_df$NEW_run_id <- sub("_RESULTS_v0.1.8$", "", result_df$NEW_run_id)
 
+#this should be TRUE if the same number of nidas is in the db and the results from the grep
+length(result_df$NIDA2) == length(db$NIDA2) #it's not....
+length(result_df$NIDA2) - length(db$NIDA2) # 113 repeated nidas...
 
+#check for repeated nidas 
+repeated_nidas <- names(table(result_df$NIDA2)[table(result_df$NIDA2) > 1]) #there are duplicate nidas OOF
+repeated_nidas_df<- result_df[result_df$NIDA2 %in% repeated_nidas,]
+repeated_nidas_df <- repeated_nidas_df[order(repeated_nidas_df$NIDA2), ]
+length(repeated_nidas_df$NIDA2)
+length(unique(repeated_nidas_df$NIDA2))
 
+#ask team about these nidas
+write.csv(repeated_nidas_df, "repeated_nidas.csv", row.names = F)
 
 # 2.- genomic data from all runs (allele data, resmarkers, haplos?)
 
