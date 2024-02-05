@@ -2,6 +2,7 @@
 library(haven)
 library(progress)
 library(fs)
+library(moire)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -32,13 +33,16 @@ library(fs)
 
 
 ######################################################################
-#------------------------INPUT DATA----------------------------------#
+#-----------------------INPUT AND PREP DATA--------------------------#
 ######################################################################
 
+#######################################################
 # 1.- metadata (provided by Simone)
+#######################################################
+
 db <- read_dta('DrugRes_2021_2022_DB_ALLDATA_1Jan2024.dta')
 colnames(db)
-unique(db$run_id) #runs that I'll
+unique(db$run_id) #incomplete... must complete
 
 # gonna need nida, year, region, province, run_id (ok)
 # gonna need run_id of all samples (i can complete the ones that doesn't have it by grepping, np)
@@ -108,9 +112,73 @@ length(unique(repeated_nidas_df$NIDA2))
 #ask team about these nidas
 write.csv(repeated_nidas_df, "repeated_nidas.csv", row.names = F)
 
+#######################################################
 # 2.- genomic data from all runs (allele data, resmarkers, haplos?)
+#######################################################
+runs <- unique(paste0(result_df$NEW_run_id, "_RESULTS_v0.1.8_FILTERED"))
+
+folder_path <- paste0("../results_v0.1.8_RESMARKERS_FIX/", runs)
+allele_data_files <- file.path(folder_path, "allele_data_global_max_0_filtered.csv")
+
+# Import filtered allele data tables to the list
+allele_data_list <- list()
+for (file in allele_data_files) {
+  allele_data <- read.csv(file)
+  allele_data_list <- append(allele_data_list, list(allele_data))
+}
+
+#format the imported dfs
+for (i in seq_along(allele_data_list)) {
+  df <- allele_data_list[[i]]
+  
+  df$sampleID <- gsub("_S.*$", "", df$sampleID)
+  df$sampleID <- gsub("_", ".", df$sampleID)
+  df$sampleID <- gsub("-", ".", df$sampleID)
+  df$sampleID <- gsub("N", "", df$sampleID)
+  
+  colnames(df)[1] <- "sample_id"
+  
+  # Update the modified data frame back in the list
+  allele_data_list[[i]] <- df
+}
+
+names(allele_data_list) <- runs
 
 
+######################################################################
+#----------------------------ANALYZE DATA----------------------------#
+######################################################################
+
+#######################################################
+# 3.- calculate MOI, eMOI and relatedness for each run
+#######################################################
+
+# set MOIRE parameters
+dat_filter <- moire::load_long_form_data(subsetted_df)
+burnin <- 1e4
+num_samples <- 1e4
+pt_chains <- seq(1, .5, length.out = 20)
+
+#run moire
+mcmc_results <- moire::run_mcmc(
+  dat_filter, is_missing = dat_filter$is_missing,
+  verbose = T, burnin = burnin, samples_per_chain = num_samples,
+  pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+  thin = 10
+)
+
+#checkpoint
+saveRDS(mcmc_results, paste0(opt$output_prefix, "_MOIRE-RESULTS.RDS"))
+
+#resume checkpoint
+mcmc_results <- readRDS(paste0(opt$output_prefix, "_MOIRE-RESULTS.RDS"))
+
+eff_coi <- moire::summarize_effective_coi(mcmc_results)
+naive_coi <- moire::summarize_coi(mcmc_results)
+relatedness <- moire::summarize_relatedness(mcmc_results)
+
+input_df <- merge(naive_coi, eff_coi, by="sample_id")
+input_df <- merge(input_df, relatedness, by="sample_id")
 
 
 
