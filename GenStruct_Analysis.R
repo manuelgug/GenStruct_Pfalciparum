@@ -3,6 +3,8 @@ library(haven)
 library(progress)
 library(fs)
 library(moire)
+library(ggplot2)
+library(dplyr)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -207,18 +209,70 @@ for (file in rds_files) {
 }
 
 
-#init loop
-eff_coi <- moire::summarize_effective_coi(moire_results_list[[1]])
-naive_coi <- moire::summarize_coi(moire_results_list[[1]])
+# Initialize an empty list to store the processed coi_results
+processed_coi_results <- data.frame()
 
-coi_results <- merge(eff_coi, naive_coi, by ="sample_id")[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
-colnames(coi_results)[1] <- c("NIDA2")
+# Loop through each element in moire_results_list
+for (i in seq_along(moire_results_list)) {
+  # Summarize effective coi and naive coi
+  eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
+  naive_coi <- moire::summarize_coi(moire_results_list[[i]])
+  
+  # Merge the summaries by sample_id
+  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
+  
+  # Add the processed coi_results to the list
+  processed_coi_results <- rbind(processed_coi_results, coi_results)
+}
 
 
+# label mono and poly infections. NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript
+processed_coi_results$polyclonal_from_ecoi_med <- ifelse(processed_coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
 
-# NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript. add that category
-coi_results$polyclonal_from_ecoi_med <- ifelse(coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
+#merge with categorical variables, controls are removed automatically
+colnames(processed_coi_results)[1] <- "NIDA2"
+processed_coi_results <- merge(processed_coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
 
-#merge with categorical variables
-coi_results <- merge(coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
 
+# % polyclonal infections on each province and region per year
+polyclonal_percentage_region <- processed_coi_results %>%
+  group_by(region, year) %>%
+  summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
+  ungroup()
+
+ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Region", y = "% Polyclonal Infections") +
+  facet_wrap(~region, scales = "free", ncol = 3) +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()
+
+polyclonal_percentage_province <- processed_coi_results %>%
+  group_by(province, year) %>%
+  summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
+  ungroup()
+
+ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Province", y = "%Polyclonal Infections") +
+  facet_wrap(~province, scales = "free", ncol = 3) +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()
+
+
+# PLOT post_effective_coi_med
+processed_coi_results$year <- factor(processed_coi_results$year)
+
+ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Region", y = "Post Effective COI Median") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+
+ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Province", y = "Post Effective COI Median") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
