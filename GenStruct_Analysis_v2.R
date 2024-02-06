@@ -146,7 +146,6 @@ for (i in seq_along(allele_data_list)) {
 
 names(allele_data_list) <- runs
 
-
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
 ######################################################################
@@ -157,17 +156,19 @@ saveRDS(allele_data_list, "allele_data_list.RDS")
 # 3.- calculate MOI, eMOI and relatedness for each run
 #######################################################
 
-# moire has to be run on all data for MOI/eMOI calculations (not sure... takes MONTHS!! ) AND separately for province and region for each year for He;
+# moire has to be run on all data for MOI/eMOI calculations (not sure... takes MONTHS!! ) AND separately for province and region for each year for He calculations;
 
 allele_data_list <- readRDS("allele_data_list.RDS")
 
 # concat all dataframes together
 combined_df <- bind_rows(allele_data_list)
 
-# calculate n.alleles for each locus of each sample (NO NEED, GOT IN DURING THE CONTAMINATS FILTERING)
-# combined_df <- combined_df %>%
-#   group_by(sample_id, locus) %>%
-#   mutate(n.alleles = n_distinct(allele))
+# calculate n.alleles for each locus of each sample if not done already
+if (!("n.alleles" %in% colnames(combined_df))){
+  combined_df <- combined_df %>%
+    group_by(sample_id, locus) %>%
+    mutate(n.alleles = n_distinct(allele))
+}
 
 # merge with metadata
 colnames(combined_df)[1]<- c("NIDA2")
@@ -233,7 +234,6 @@ for (file in region_rds_files) {
   file_name <- tools::file_path_sans_ext(basename(file))
   moire_results_list[[file_name]] <- readRDS(file)
 }
-
 
 # Initialize an empty list to store the processed coi_results
 processed_coi_results <- data.frame()
