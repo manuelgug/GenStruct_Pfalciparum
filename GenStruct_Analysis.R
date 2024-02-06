@@ -240,39 +240,73 @@ polyclonal_percentage_region <- processed_coi_results %>%
   summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
 
-ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
+a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "Region", y = "% Polyclonal Infections") +
   facet_wrap(~region, scales = "free", ncol = 3) +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
   theme_minimal()
+a
 
 polyclonal_percentage_province <- processed_coi_results %>%
   group_by(province, year) %>%
   summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
 
-ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
+b <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "Province", y = "%Polyclonal Infections") +
   facet_wrap(~province, scales = "free", ncol = 3) +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
   theme_minimal()
+b
 
-
-# PLOT post_effective_coi_med
+# post_effective_coi_med
 processed_coi_results$year <- factor(processed_coi_results$year)
 
-ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
+c <- ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
   geom_boxplot() +
   labs(x = "Region", y = "Post Effective COI Median") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
   theme_minimal()+
   ylim(0, NA)
+c
 
-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
+d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
   geom_boxplot() +
   labs(x = "Province", y = "Post Effective COI Median") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
   theme_minimal()+
   ylim(0, NA)
+d
+
+
+#######################################################
+# 5.- Calculate He and Fws per locus and means per province and region 
+#######################################################
+
+allele_data_list <- readRDS("allele_data_list.RDS")
+
+# concat all dataframes together
+combined_df <- bind_rows(allele_data_list)
+
+# calculate n.alleles for each locus of each sample (NO NEEE, GOT IN DURING THE CONTAMINATS FILTERING)
+# combined_df <- combined_df %>%
+#   group_by(sample_id, locus) %>%
+#   mutate(n.alleles = n_distinct(allele))
+
+# merge with metadata
+colnames(combined_df)[1]<- c("NIDA2")
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.x = T)
+
+# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
+combined_df_merged <- combined_df_merged %>%
+  filter(!is.na(year) & !is.na(province) & !is.na(region))
+
+# calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
+
+# calculate heterozygosity of the population (He): pop = province, region
+
+# calculate fixation index (Fws)
+
+# linear regression and correlation coeff of He vs eMOI
