@@ -145,6 +145,8 @@ for (i in seq_along(allele_data_list)) {
 names(allele_data_list) <- runs
 
 
+saveRDS(allele_data_list, "allele_data_list.RDS")
+
 ######################################################################
 #----------------------------ANALYZE DATA----------------------------#
 ######################################################################
@@ -189,4 +191,34 @@ input_df <- merge(naive_coi, eff_coi, by="sample_id")
 input_df <- merge(input_df, relatedness, by="sample_id")
 
 
+#######################################################
+# 4.- Calculate MOI/eMOI overall and means per province and region for each year
+#######################################################
+
+#import  moire results:
+rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+
+moire_results_list <- list()
+
+# Load each RDS file into the list with the file name as the list name
+for (file in rds_files) {
+  file_name <- tools::file_path_sans_ext(basename(file))
+  moire_results_list[[file_name]] <- readRDS(file)
+}
+
+
+#init loop
+eff_coi <- moire::summarize_effective_coi(moire_results_list[[1]])
+naive_coi <- moire::summarize_coi(moire_results_list[[1]])
+
+coi_results <- merge(eff_coi, naive_coi, by ="sample_id")[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
+colnames(coi_results)[1] <- c("NIDA2")
+
+
+
+# NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript. add that category
+coi_results$polyclonal_from_ecoi_med <- ifelse(coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
+
+#merge with categorical variables
+coi_results <- merge(coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
 
