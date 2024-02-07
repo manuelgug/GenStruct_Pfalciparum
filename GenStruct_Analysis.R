@@ -186,8 +186,6 @@ for (i in seq_along(allele_data_list)) {
 # 4.- calculate He for each population (per year per region/province)
 #######################################################
 
-## CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
-
 allele_data_list <- readRDS("allele_data_list.RDS")
 
 # concat all dataframes together
@@ -208,28 +206,31 @@ combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "regi
 combined_df_merged <- combined_df_merged %>%
   filter(!is.na(year) & !is.na(province) & !is.na(region))
 
+
+## CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
+sample_size_provinces <- combined_df_merged %>%
+  group_by(year, province) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_regions <- combined_df_merged %>%
+  group_by(year, region) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
-provinces_2021 <- unique(combined_df_merged_2021$province)
-regions_2021 <- unique(combined_df_merged_2021$region)
-
 #subset 2022 data
 combined_df_merged_2022 <- combined_df_merged[combined_df_merged$year == "2022", ]
-provinces_2022 <- unique(combined_df_merged_2022$province)
-regions_2022 <- unique(combined_df_merged_2022$region)
 
-
-# MOIRE ON EACH PROVINCE DURING 2021 (loop): from 2021 data, loop through each province
-for (province in provinces_2021){
-  
-  #subset province
-  df <- combined_df_merged_2021[combined_df_merged_2021$province == province, ]
-  colnames(df)[1] <- c("sample_id")
+# RUN IN CLUSTER:
+# Define function to run MOIRE and save results
+run_moire <- function(df, output_name) {
+  colnames(df)[1] <- "sample_id"
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
+  burnin <- 3
+  num_samples <- 3
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
@@ -241,85 +242,45 @@ for (province in provinces_2021){
   )
   
   # checkpoint
-  saveRDS(mcmc_results, paste0(province, "_2021_MOIRE-RESULTS.RDS"))
+  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS.RDS"))
 }
 
+# Create a list of data frames and corresponding years
+data_frames <- list(combined_df_merged_2021, combined_df_merged_2022)
+years <- list("2021", "2022")
 
-# MOIRE ON EACH REGION DURING 2021 (loop): from 2021 data, loop through each region
-for (region in regions_2021){
+# Loop over each province
+for (i in seq_along(data_frames)) {
+  year <- years[[i]]
+  df <- data_frames[[i]]
   
-  #subset province
-  df <- combined_df_merged_2021[combined_df_merged_2021$region == region, ]
-  colnames(df)[1] <- c("sample_id")
-  
-  # set MOIRE parameters
-  dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
-  pt_chains <- seq(1, .5, length.out = 20)
-  
-  # run moire
-  mcmc_results <- moire::run_mcmc(
-    dat_filter, is_missing = dat_filter$is_missing,
-    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-    thin = 10
-  )
-  
-  # checkpoint
-  saveRDS(mcmc_results, paste0(region, "_2021_MOIRE-RESULTS.RDS"))
+  for (province in unique(df$province)) {
+    province_df <- df[df$province == province, ]
+    
+    # Run MOIRE
+    it_pr <-  paste0(province, "_", year)
+    print(it_pr)
+    
+    run_moire(province_df, it_pr)
+  }
 }
 
-
-# MOIRE ON EACH PROVINCE DURING 2022 (loop): from 2022 data, loop through each province
-for (province in provinces_2022){
+# Loop over each region
+for (i in seq_along(data_frames)) {
+  year <- years[[i]]
+  df <- data_frames[[i]]
   
-  #subset province
-  df <- combined_df_merged_2022[combined_df_merged_2022$province == province, ]
-  colnames(df)[1] <- c("sample_id")
-  
-  # set MOIRE parameters
-  dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
-  pt_chains <- seq(1, .5, length.out = 20)
-  
-  # run moire
-  mcmc_results <- moire::run_mcmc(
-    dat_filter, is_missing = dat_filter$is_missing,
-    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-    thin = 10
-  )
-  
-  # checkpoint
-  saveRDS(mcmc_results, paste0(province, "_2022_MOIRE-RESULTS.RDS"))
+  for (region in unique(df$region)) {
+    province_df <- df[df$region == region, ]
+    
+    # Run MOIRE
+    it_re <-  paste0(region, "_", year)
+    print(it_re)
+    
+    run_moire(province_df, it_re)
+  }
 }
 
-# MOIRE ON EACH REGION DURING 2022 (loop): from 2022 data, loop through each region
-for (region in regions_2022){
-  
-  #subset province
-  df <- combined_df_merged_2022[combined_df_merged_2022$region == region, ]
-  colnames(df)[1] <- c("sample_id")
-  
-  # set MOIRE parameters
-  dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
-  pt_chains <- seq(1, .5, length.out = 20)
-  
-  # run moire
-  mcmc_results <- moire::run_mcmc(
-    dat_filter, is_missing = dat_filter$is_missing,
-    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-    thin = 10
-  )
-  
-  # checkpoint
-  saveRDS(mcmc_results, paste0(region, "_2022_MOIRE-RESULTS.RDS"))
-}
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
@@ -443,7 +404,3 @@ combined_df_merged <- combined_df_merged %>%
 # calculate fixation index (Fws)
 
 # linear regression and correlation coeff of He vs eMOI
-
-
-
-
