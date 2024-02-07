@@ -5,6 +5,7 @@ library(fs)
 library(moire)
 library(ggplot2)
 library(dplyr)
+library(vegan)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -217,6 +218,59 @@ sample_size_regions <- combined_df_merged %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
 
+
+
+###########################################
+# ACCUMULATION CURVES
+
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                    year = combined_df_merged$year, 
+                    province = combined_df_merged$province,
+                    region = combined_df_merged$region,
+                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
+
+#subsetting
+sub <- raref_input[raref_input$year == 2022 & raref_input$region =="North",] #iterate this
+unique_nidas <- unique(sub$NIDA2)
+
+unique_alleles <- list()
+
+# Iterate over each unique NIDA2
+for (nida in unique(sub$NIDA2)) {
+
+  subset_data <- sub[sub$NIDA2 == nida, ]
+  unique_alleles_it <- unique(subset_data$allele)
+  unique_alleles[[as.character(nida)]] <- unique_alleles_it
+}
+
+# Get unique alleles across all elements
+all_unique_alleles <- unique(unlist(unique_alleles))
+
+# Create a matrix to store presence/absence of unique alleles for each element
+presence_matrix <- sapply(unique_alleles, function(x) {
+  as.integer(all_unique_alleles %in% x)
+})
+
+# Convert the matrix to a dataframe
+presence_df <- as.data.frame(presence_matrix)
+presence_df <- t(presence_df)
+rownames(presence_df) <- names(unique_alleles)
+colnames(presence_df) <- all_unique_alleles
+
+# CALCULATE CURVE
+accum_curve <-specaccum(presence_df, 'random', permutations = 100)
+accum_curve1 <-specaccum(presence_df, 'random', permutations = 100)
+accum_curve2 <-specaccum(presence_df, 'random', permutations = 100)
+
+plot(accum_curve, xlab = "Samples")
+plot(accum_curve1, xlab = "Samples", add=T, col = "blue")
+plot(accum_curve2, xlab = "Samples", add=T, col = "red")
+
+
+###########################################
+
+
+
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
 #subset 2022 data
@@ -229,8 +283,8 @@ run_moire <- function(df, output_name) {
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 3
-  num_samples <- 3
+  burnin <- 1e4
+  num_samples <- 1e4
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
