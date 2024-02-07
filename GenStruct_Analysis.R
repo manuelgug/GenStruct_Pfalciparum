@@ -186,20 +186,140 @@ for (i in seq_along(allele_data_list)) {
 # 4.- calculate He for each population (per year per region/province)
 #######################################################
 
-## CALCULATE SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
+## CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 
-# MOIRE ON EACH PROVINCE DURING 2021 (loop)
-#subset 2021 data, loop through each province
+allele_data_list <- readRDS("allele_data_list.RDS")
 
-# MOIRE ON EACH REGION DURING 2021 (loop)
-#subset 2021 data, loop through each region
+# concat all dataframes together
+combined_df <- bind_rows(allele_data_list)
 
-# MOIRE ON EACH PROVINCE DURING 2022 (loop)
-#subset 2022 data, loop through each province
+# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
+if (!("n.alleles" %in% colnames(combined_df))){
+  combined_df <- combined_df %>%
+    group_by(sample_id, locus) %>%
+    mutate(n.alleles = n_distinct(allele))
+}
 
-# MOIRE ON EACH REGION DURING 2022 (loop)
-#subset 2022 data, loop through each region
+# merge with metadata
+colnames(combined_df)[1]<- c("NIDA2")
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.x = T)
 
+# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
+combined_df_merged <- combined_df_merged %>%
+  filter(!is.na(year) & !is.na(province) & !is.na(region))
+
+#subset 2021 data
+combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
+provinces_2021 <- unique(combined_df_merged_2021$province)
+regions_2021 <- unique(combined_df_merged_2021$region)
+
+#subset 2022 data
+combined_df_merged_2022 <- combined_df_merged[combined_df_merged$year == "2022", ]
+provinces_2022 <- unique(combined_df_merged_2022$province)
+regions_2022 <- unique(combined_df_merged_2022$region)
+
+
+# MOIRE ON EACH PROVINCE DURING 2021 (loop): from 2021 data, loop through each province
+for (province in provinces_2021){
+  
+  #subset province
+  df <- combined_df_merged_2021[combined_df_merged_2021$province == province, ]
+  colnames(df)[1] <- c("sample_id")
+  
+  # set MOIRE parameters
+  dat_filter <- moire::load_long_form_data(df)
+  burnin <- 1e4
+  num_samples <- 1e4
+  pt_chains <- seq(1, .5, length.out = 20)
+  
+  # run moire
+  mcmc_results <- moire::run_mcmc(
+    dat_filter, is_missing = dat_filter$is_missing,
+    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+    thin = 10
+  )
+  
+  # checkpoint
+  saveRDS(mcmc_results, paste0(province, "_2021_MOIRE-RESULTS.RDS"))
+}
+
+
+# MOIRE ON EACH REGION DURING 2021 (loop): from 2021 data, loop through each region
+for (region in regions_2021){
+  
+  #subset province
+  df <- combined_df_merged_2021[combined_df_merged_2021$region == region, ]
+  colnames(df)[1] <- c("sample_id")
+  
+  # set MOIRE parameters
+  dat_filter <- moire::load_long_form_data(df)
+  burnin <- 1e4
+  num_samples <- 1e4
+  pt_chains <- seq(1, .5, length.out = 20)
+  
+  # run moire
+  mcmc_results <- moire::run_mcmc(
+    dat_filter, is_missing = dat_filter$is_missing,
+    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+    thin = 10
+  )
+  
+  # checkpoint
+  saveRDS(mcmc_results, paste0(region, "_2021_MOIRE-RESULTS.RDS"))
+}
+
+
+# MOIRE ON EACH PROVINCE DURING 2022 (loop): from 2022 data, loop through each province
+for (province in provinces_2022){
+  
+  #subset province
+  df <- combined_df_merged_2022[combined_df_merged_2022$province == province, ]
+  colnames(df)[1] <- c("sample_id")
+  
+  # set MOIRE parameters
+  dat_filter <- moire::load_long_form_data(df)
+  burnin <- 1e4
+  num_samples <- 1e4
+  pt_chains <- seq(1, .5, length.out = 20)
+  
+  # run moire
+  mcmc_results <- moire::run_mcmc(
+    dat_filter, is_missing = dat_filter$is_missing,
+    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+    thin = 10
+  )
+  
+  # checkpoint
+  saveRDS(mcmc_results, paste0(province, "_2022_MOIRE-RESULTS.RDS"))
+}
+
+# MOIRE ON EACH REGION DURING 2022 (loop): from 2022 data, loop through each region
+for (region in regions_2022){
+  
+  #subset province
+  df <- combined_df_merged_2022[combined_df_merged_2022$region == region, ]
+  colnames(df)[1] <- c("sample_id")
+  
+  # set MOIRE parameters
+  dat_filter <- moire::load_long_form_data(df)
+  burnin <- 1e4
+  num_samples <- 1e4
+  pt_chains <- seq(1, .5, length.out = 20)
+  
+  # run moire
+  mcmc_results <- moire::run_mcmc(
+    dat_filter, is_missing = dat_filter$is_missing,
+    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+    thin = 10
+  )
+  
+  # checkpoint
+  saveRDS(mcmc_results, paste0(region, "_2022_MOIRE-RESULTS.RDS"))
+}
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
@@ -298,10 +418,12 @@ allele_data_list <- readRDS("allele_data_list.RDS")
 # concat all dataframes together
 combined_df <- bind_rows(allele_data_list)
 
-# calculate n.alleles for each locus of each sample (NO NEEE, GOT IN DURING THE CONTAMINATS FILTERING)
-# combined_df <- combined_df %>%
-#   group_by(sample_id, locus) %>%
-#   mutate(n.alleles = n_distinct(allele))
+# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
+if (!("n.alleles" %in% colnames(combined_df))){
+  combined_df <- combined_df %>%
+    group_by(sample_id, locus) %>%
+    mutate(n.alleles = n_distinct(allele))
+}
 
 # merge with metadata
 colnames(combined_df)[1]<- c("NIDA2")
@@ -317,7 +439,6 @@ combined_df_merged <- combined_df_merged %>%
   mutate(Hw = 1 - (n.alleles * (1/n.alleles)^2))
 
 # calculate heterozygosity of the population (He): pop = province, region
-
 
 # calculate fixation index (Fws)
 
