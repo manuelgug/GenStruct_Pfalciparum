@@ -223,6 +223,7 @@ sample_size_regions <- combined_df_merged %>%
 
 
 
+
 ###########################################
 # RAREFACTION CURVES
 
@@ -231,7 +232,8 @@ raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2,
                                    province = combined_df_merged$province,
                                    region = combined_df_merged$region,
                                    locus = combined_df_merged$locus,
-                                   n.alleles = combined_df_merged$n.alleles))
+                                   n.alleles = combined_df_merged$n.alleles,
+                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
 
 raref_input <- raref_input %>% distinct()
 
@@ -249,7 +251,7 @@ accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "raref
 plot(accum_curve, xlab = "Samples")
 
 ###########################################
-#ACCUMULATION CURVES
+#ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr)
 
 # Initialize a list to store the rarefaction curves for each year
 accum_curves_2021 <- list()
@@ -340,20 +342,16 @@ plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumula
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
-legend("bottomright", legend = names(accum_curves_2021), fill = colors)
+legend(x = 65, y = 1100, legend = names(accum_curves_2021), fill = colors)
 
 # Plot the curves for 2022
 plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022", xlim = c(0,200), ylim = c(0,3000))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
-legend("bottomright", legend = names(accum_curves_2022), fill = colors)
+legend(x = 170, y = 1000, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 ###########################################
-
-
-
-
 
 
 
