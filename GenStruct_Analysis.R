@@ -6,6 +6,7 @@ library(moire)
 library(ggplot2)
 library(dplyr)
 library(vegan)
+library(reshape2)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -223,51 +224,76 @@ sample_size_regions <- combined_df_merged %>%
 ###########################################
 # ACCUMULATION CURVES
 
+# raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+#                     year = combined_df_merged$year, 
+#                     province = combined_df_merged$province,
+#                     region = combined_df_merged$region,
+#                     allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
+
+
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-                    year = combined_df_merged$year, 
-                    province = combined_df_merged$province,
-                    region = combined_df_merged$region,
-                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
+                                   year = combined_df_merged$year, 
+                                   province = combined_df_merged$province,
+                                   region = combined_df_merged$region,
+                                   locus = combined_df_merged$locus,
+                                   n.alleles = combined_df_merged$n.alleles))
 
-#subsetting
-sub <- raref_input[raref_input$year == 2022 & raref_input$region =="North",] #iterate this
-unique_nidas <- unique(sub$NIDA2)
+raref_input <- raref_input %>% distinct()
 
-unique_alleles <- list()
+#subsetting #INIT LOOP
+sub <- raref_input[raref_input$year == 2022 & raref_input$region =="South",] #iterate this 
 
-# Iterate over each unique NIDA2
-for (nida in unique(sub$NIDA2)) {
+# Cast the dataframe to wide format
+raref_df <- dcast(sub, NIDA2 ~ locus, value.var = "n.alleles")
+#raref_df[is.na(raref_df)] <- 0
+raref_df <- raref_df[, -1]
+raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
 
-  subset_data <- sub[sub$NIDA2 == nida, ]
-  unique_alleles_it <- unique(subset_data$allele)
-  unique_alleles[[as.character(nida)]] <- unique_alleles_it
-}
-
-# Get unique alleles across all elements
-all_unique_alleles <- unique(unlist(unique_alleles))
-
-# Create a matrix to store presence/absence of unique alleles for each element
-presence_matrix <- sapply(unique_alleles, function(x) {
-  as.integer(all_unique_alleles %in% x)
-})
-
-# Convert the matrix to a dataframe
-presence_df <- as.data.frame(presence_matrix)
-presence_df <- t(presence_df)
-rownames(presence_df) <- names(unique_alleles)
-colnames(presence_df) <- all_unique_alleles
 
 # CALCULATE CURVE
-accum_curve <-specaccum(presence_df, 'random', permutations = 100)
-accum_curve1 <-specaccum(presence_df, 'random', permutations = 100)
-accum_curve2 <-specaccum(presence_df, 'random', permutations = 100)
-
+accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "rarefaction")
 plot(accum_curve, xlab = "Samples")
-plot(accum_curve1, xlab = "Samples", add=T, col = "blue")
-plot(accum_curve2, xlab = "Samples", add=T, col = "red")
 
+
+##################not sure what to do with the following...#########################
+data(BCI)
+S <- specnumber(BCI) # observed number of species
+(raremax <- min(rowSums(BCI)))
+#> [1] 340
+Srare <- rarefy(BCI, raremax)
+plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+abline(0, 1)
+rarecurve(BCI, step = 20, sample = raremax, col = "blue", cex = 0.6)
+
+#####
+# Example presence-absence dataframe
+# Replace this with your actual presence-absence dataframe
+presence_absence_df <- data.frame(
+  Sample1 = c(1, 0, 1, 0),
+  Sample2 = c(0, 1, 1, 0),
+  Sample3 = c(1, 1, 0, 0),
+  Sample4 = c(1, 1, 1, 1)
+)
+rownames(presence_absence_df) <- c("Allele1", "Allele2", "Allele3", "Allele4")
+
+# Function to calculate rarefaction curve
+calculate_rarefaction_curve <- function(df) {
+  # Calculate the number of unique alleles in each sample
+  sample_alleles <- rowSums(df)
+  # Initialize rarefaction curve
+  rarefaction_curve <- specaccum(sample_alleles, method = "rarefaction")
+  return(rarefaction_curve)
+}
+
+# Calculate rarefaction curve
+rarefaction_result <- calculate_rarefaction_curve(raref_df)
+
+# Plot rarefaction curve
+plot(rarefaction_result, xlab = "Number of Samples", ylab = "Cumulative Number of Unique Alleles")
 
 ###########################################
+
+
 
 
 
