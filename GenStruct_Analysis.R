@@ -7,6 +7,8 @@ library(ggplot2)
 library(dplyr)
 library(vegan)
 library(reshape2)
+library(RColorBrewer)
+
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -222,14 +224,7 @@ sample_size_regions <- combined_df_merged %>%
 
 
 ###########################################
-# ACCUMULATION CURVES
-
-# raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-#                     year = combined_df_merged$year, 
-#                     province = combined_df_merged$province,
-#                     region = combined_df_merged$region,
-#                     allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
-
+# RAREFACTION CURVES
 
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
                                    year = combined_df_merged$year, 
@@ -241,11 +236,10 @@ raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2,
 raref_input <- raref_input %>% distinct()
 
 #subsetting #INIT LOOP
-sub <- raref_input[raref_input$year == 2022 & raref_input$region =="South",] #iterate this 
+sub <- raref_input[raref_input$year == 2022 & raref_input$province =="Maputo",] #iterate this 
 
 # Cast the dataframe to wide format
 raref_df <- dcast(sub, NIDA2 ~ locus, value.var = "n.alleles")
-#raref_df[is.na(raref_df)] <- 0
 raref_df <- raref_df[, -1]
 raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
 
@@ -254,44 +248,112 @@ raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
 accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "rarefaction")
 plot(accum_curve, xlab = "Samples")
 
+###########################################
+#ACCUMULATION CURVES
 
-##################not sure what to do with the following...#########################
-data(BCI)
-S <- specnumber(BCI) # observed number of species
-(raremax <- min(rowSums(BCI)))
-#> [1] 340
-Srare <- rarefy(BCI, raremax)
-plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
-abline(0, 1)
-rarecurve(BCI, step = 20, sample = raremax, col = "blue", cex = 0.6)
+# Initialize a list to store the rarefaction curves for each year
+accum_curves_2021 <- list()
+accum_curves_2022 <- list()
 
-#####
-# Example presence-absence dataframe
-# Replace this with your actual presence-absence dataframe
-presence_absence_df <- data.frame(
-  Sample1 = c(1, 0, 1, 0),
-  Sample2 = c(0, 1, 1, 0),
-  Sample3 = c(1, 1, 0, 0),
-  Sample4 = c(1, 1, 1, 1)
-)
-rownames(presence_absence_df) <- c("Allele1", "Allele2", "Allele3", "Allele4")
+# Get unique years and provinces
+unique_provinces <- unique(raref_input$province)
 
-# Function to calculate rarefaction curve
-calculate_rarefaction_curve <- function(df) {
-  # Calculate the number of unique alleles in each sample
-  sample_alleles <- rowSums(df)
-  # Initialize rarefaction curve
-  rarefaction_curve <- specaccum(sample_alleles, method = "rarefaction")
-  return(rarefaction_curve)
+# Iterate over each province
+for (province in unique_provinces) {
+  
+  print(province)
+  
+  # Subsetting the data for 2021
+  sub_2021 <- raref_input[raref_input$year == 2021 & raref_input$province == province, ]
+  
+  # Check if there are unique NIDA2s for 2021
+  if (length(unique(sub_2021$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2021
+    unique_alleles_2021 <- list()
+    
+    # Iterate over each unique NIDA2 for 2021
+    for (nida in unique(sub_2021$NIDA2)) {
+      subset_data <- sub_2021[sub_2021$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2021[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2021
+    all_unique_alleles_2021 <- unique(unlist(unique_alleles_2021))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2021
+    presence_matrix_2021 <- sapply(unique_alleles_2021, function(x) {
+      as.integer(all_unique_alleles_2021 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2021
+    presence_df_2021 <- as.data.frame(presence_matrix_2021)
+    presence_df_2021 <- t(presence_df_2021)
+    rownames(presence_df_2021) <- names(unique_alleles_2021)
+    colnames(presence_df_2021) <- all_unique_alleles_2021
+    
+    # CALCULATE CURVE for 2021
+    accum_curve_2021 <- specaccum(presence_df_2021, 'random', permutations = 100)
+    accum_curves_2021[[province]] <- accum_curve_2021
+  }
+  
+  # Subsetting the data for 2022
+  sub_2022 <- raref_input[raref_input$year == 2022 & raref_input$province == province, ]
+  
+  # Check if there are unique NIDA2s for 2022
+  if (length(unique(sub_2022$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2022
+    unique_alleles_2022 <- list()
+    
+    # Iterate over each unique NIDA2 for 2022
+    for (nida in unique(sub_2022$NIDA2)) {
+      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2022
+    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2022
+    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
+      as.integer(all_unique_alleles_2022 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2022
+    presence_df_2022 <- as.data.frame(presence_matrix_2022)
+    presence_df_2022 <- t(presence_df_2022)
+    rownames(presence_df_2022) <- names(unique_alleles_2022)
+    colnames(presence_df_2022) <- all_unique_alleles_2022
+    
+    # CALCULATE CURVE for 2022
+    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
+    accum_curves_2022[[province]] <- accum_curve_2022
+  }
 }
 
-# Calculate rarefaction curve
-rarefaction_result <- calculate_rarefaction_curve(raref_df)
+# Select 9 colors from the Paired palette
+colors <- brewer.pal(9, "Paired")
 
-# Plot rarefaction curve
-plot(rarefaction_result, xlab = "Number of Samples", ylab = "Cumulative Number of Unique Alleles")
+# Plot the curves for 2021
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021", xlim = c(0,85), ylim = c(0,2700))
+for (i in 2:length(accum_curves_2021)) {
+  lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
+}
+legend("bottomright", legend = names(accum_curves_2021), fill = colors)
+
+# Plot the curves for 2022
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022", xlim = c(0,200), ylim = c(0,3000))
+for (i in 2:length(accum_curves_2022)) {
+  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
+}
+legend("bottomright", legend = names(accum_curves_2022), fill = colors)
 
 ###########################################
+
+
+
+
 
 
 
