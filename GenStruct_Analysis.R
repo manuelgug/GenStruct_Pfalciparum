@@ -146,7 +146,6 @@ for (i in seq_along(allele_data_list)) {
 
 names(allele_data_list) <- runs
 
-
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
 ######################################################################
@@ -156,6 +155,8 @@ saveRDS(allele_data_list, "allele_data_list.RDS")
 #######################################################
 # 3.- calculate MOI, eMOI and relatedness for each run
 #######################################################
+
+# moire has to be run on all data for MOI/eMOI calculations AND separately for province and region for each year; so A TOTAL OF 5 TIME
 
 # Iterate over each element in allele_data_list
 for (i in seq_along(allele_data_list)) {
@@ -181,20 +182,27 @@ for (i in seq_along(allele_data_list)) {
 }
 
 
+#######################################################
+# 4.- calculate He for each population (per year per region/province)
+#######################################################
 
-#resume checkpoint
-mcmc_results <- readRDS(paste0(run, "_MOIRE-RESULTS.RDS"))
+## CALCULATE SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 
-eff_coi <- moire::summarize_effective_coi(mcmc_results)
-naive_coi <- moire::summarize_coi(mcmc_results)
-relatedness <- moire::summarize_relatedness(mcmc_results)
+# MOIRE ON EACH PROVINCE DURING 2021 (loop)
+#subset 2021 data, loop through each province
 
-input_df <- merge(naive_coi, eff_coi, by="sample_id")
-input_df <- merge(input_df, relatedness, by="sample_id")
+# MOIRE ON EACH REGION DURING 2021 (loop)
+#subset 2021 data, loop through each region
+
+# MOIRE ON EACH PROVINCE DURING 2022 (loop)
+#subset 2022 data, loop through each province
+
+# MOIRE ON EACH REGION DURING 2022 (loop)
+#subset 2022 data, loop through each region
 
 
 #######################################################
-# 4.- Calculate MOI/eMOI overall and means per province and region for each year
+# 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
 #import  moire results:
@@ -219,7 +227,7 @@ for (i in seq_along(moire_results_list)) {
   naive_coi <- moire::summarize_coi(moire_results_list[[i]])
   
   # Merge the summaries by sample_id
-  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
+  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
   
   # Add the processed coi_results to the list
   processed_coi_results <- rbind(processed_coi_results, coi_results)
@@ -282,7 +290,7 @@ d
 
 
 #######################################################
-# 5.- Calculate He and Fws per locus and means per province and region 
+# 6.- Calculate He and Fws per locus and means per province and region 
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
@@ -304,9 +312,17 @@ combined_df_merged <- combined_df_merged %>%
   filter(!is.na(year) & !is.na(province) & !is.na(region))
 
 # calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
+combined_df_merged <- combined_df_merged %>%
+  group_by(NIDA2, locus) %>%
+  mutate(Hw = 1 - (n.alleles * (1/n.alleles)^2))
 
 # calculate heterozygosity of the population (He): pop = province, region
+
 
 # calculate fixation index (Fws)
 
 # linear regression and correlation coeff of He vs eMOI
+
+
+
+
