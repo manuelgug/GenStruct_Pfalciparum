@@ -185,44 +185,42 @@ merged_df_dups$BEST_RUN <- colnames(merged_df_dups)[apply(merged_df_dups[-1], 1,
 #did i found all replicates?
 if (all(repeated_nidas_df$NIDA2 %in% merged_df_dups$sample_id)) {
   print("You found all replicates. Proceed with removal")
+}else{
+  "grab a coffe"
 }
 
+
 #remove replicates, keep the best
-# for (i in seq_along(allele_data_list)) {
-#   df <- allele_data_list[[i]]
-#   sample_id <- df$sample_id
-#   best_run <- merged_df_dups$BEST_RUN[merged_df_dups$sample_id == sample_id]
-#   
-#   print(paste("Best run:", best_run))
-#   print(paste("Current dataframe name:", names(allele_data_list)[i]))
-#   print(paste("Sample ID:", sample_id))
-#   
-#   if (!is.null(best_run) && length(best_run) > 0 && all(!is.na(best_run))) {
-#     if (names(allele_data_list)[i] != best_run) {
-#       allele_data_list[[i]] <- df[!(df$sample_id %in% merged_df_dups$sample_id), ]
-#     }
-#   }
-# }
+for (i in 1:nrow(merged_df_dups)) {
+  best_run <- merged_df_dups$BEST_RUN[i]
+  sample_id <- merged_df_dups$sample_id[i]
+  
+  # Loop through allele_data_list
+  for (j in seq_along(allele_data_list)) {
+    df <- allele_data_list[[j]]
+    
+    # Exclude the df named after BEST_RUN
+    if (names(allele_data_list)[j] != best_run) {
+      allele_data_list[[j]] <- df[!(df$sample_id %in% sample_id), ]
+    }
+  }
+}
 
-
+#final check:
 summed_reads <- lapply(allele_data_list, sum_reads)
-
-# Change colnames of reads for the name of the respective df
 summed_reads <- lapply(names(summed_reads), function(df_name) {
   df <- summed_reads[[df_name]]
   names(df)[2] <- df_name
   return(df)
 })
-
-# Merge all data frames by sample_id
 merged_df_dups <- Reduce(function(x, y) merge(x, y, by = "sample_id", all = TRUE), summed_reads)
-
-#keep rows with replicates
 merged_df_dups <- merged_df_dups[rowSums(is.na(merged_df_dups)) < length(colnames(merged_df_dups)) - 2, ] #keep rows with more than 14 NAs (that is, that have reads in more than one run)
 
-
-
-
+if (dim(merged_df_dups)[1] == 0){
+  print("NO MORE REPLICATES.")
+}else{
+  "grab a coffe"
+}
 
 #save allele_data_list
 saveRDS(allele_data_list, "allele_data_list.RDS")
@@ -255,14 +253,6 @@ combined_df_merged <- combined_df_merged %>%
 if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
   print("All nidas in combined_merged_df are also in the metadata db ✅")
 }
-
-
-#----- ya sólo queda el problema de los duplicados..., ya no hay múltiplies alelos falsos luego de corregir lo que dijo andrés en slack---------------------
-combined_df_merged
-dup <- combined_df_merged[duplicated(combined_df_merged[, c("NIDA2", "locus", "pseudo_cigar")]), ]
-
-sum(is.na(dup$NIDA2 %in% repeated_nidas_df$NIDA2))
-#-----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 ######################################################################
@@ -578,7 +568,10 @@ rearranged <- melted %>%
 rearranged <- as.data.frame(rearranged)
 rownames(rearranged) <- rearranged$NIDA2
 rearranged <- rearranged[, -1]
-#turn null to 0!!! (Still didn't do it)
+rearranged <- replace(rearranged, is.na(rearranged), 0)
+
+
+
 
 ################################################################
 
