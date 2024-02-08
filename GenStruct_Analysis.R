@@ -78,6 +78,9 @@ for (folder_path in dir_ls(path = directory_path, regexp = "_RESULTS_v0.1.8$")) 
   folder_name <- path_file(folder_path)
   file_path <- file.path(folder_path, "amplicon_coverage.txt")
   
+  cat("\n")
+  print(folder_name)
+  
   # Read the contents of /quality_report/amplicon_stats.txt
   if (file.exists(file_path)) {
     sample_coverage_content <- readLines(file_path)
@@ -90,7 +93,7 @@ for (folder_path in dir_ls(path = directory_path, regexp = "_RESULTS_v0.1.8$")) 
     truncated_values <- gsub("N", "", truncated_values)
     
     # Extract NIDA2 from runs using grep
-    nida_values <- grep(paste(db$NIDA2, collapse = "|"), truncated_values, value = TRUE)
+    nida_values <- grep(paste(db$NIDA2, collapse = "|"), truncated_values, value = TRUE) #not all samples from runs are needed, only those in the db, hence this
     
     # Create a data frame with NIDA2 and folder_name
     if (length(nida_values) > 0) {
@@ -150,6 +153,18 @@ for (i in seq_along(allele_data_list)) {
 
 names(allele_data_list) <- runs
 
+# Assuming allele_data_list is a list containing data frames
+total_sum <- 0
+
+for(df in allele_data_list) {
+  column_values <- df[[1]]
+  unique_values <- unique(column_values)
+  print(unique_values)
+  total_sum <- total_sum + sum(length(unique_values))
+}
+
+print(total_sum) #there are controls and other unusable samples here. no problem 'cause when merging with metadata they are left out.
+
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
 ######################################################################
@@ -157,15 +172,17 @@ saveRDS(allele_data_list, "allele_data_list.RDS")
 ######################################################################
 
 #######################################################
-# 3.- calculate MOI, eMOI and relatedness for each run
+# 3.- calculate MOI and eMOI for each run
 #######################################################
+# calculating from each run even though not all samples are gonna be used for the analysis. more info == better moi calculation so np
 
-# moire has to be run on all data for MOI/eMOI calculations AND separately for province and region for each year; so A TOTAL OF 5 TIME
+allele_data_list <- readRDS("allele_data_list.RDS") 
 
 # Iterate over each element in allele_data_list
 for (i in seq_along(allele_data_list)) {
   run <- names(allele_data_list)[i]
   df <- allele_data_list[[i]]
+  print(run)
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
@@ -187,7 +204,7 @@ for (i in seq_along(allele_data_list)) {
 
 
 #######################################################
-# 4.- calculate He for each population (per year per region/province)
+# 4.- GENOMIC + DB MERGING
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
@@ -204,27 +221,36 @@ if (!("n.alleles" %in% colnames(combined_df))){
 
 # merge with metadata
 colnames(combined_df)[1]<- c("NIDA2")
-combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.x = T)
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.y = T)
 
 # delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
 combined_df_merged <- combined_df_merged %>%
   filter(!is.na(year) & !is.na(province) & !is.na(region))
 
+#sanity check
+if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
+  print("All nidas in combined_merged_df are also in the metadata db ✅")
+}
 
-## CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
+combined_df_merged[is.na(combined_df_merged), ]
+
+#######################################################
+# 5.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
+#######################################################
+
 sample_size_provinces <- combined_df_merged %>%
   group_by(year, province) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_provinces
 
 sample_size_regions <- combined_df_merged %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
+sample_size_regions
 
-
-
-
-###########################################
+################################### 
 # RAREFACTION CURVES
 
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
@@ -251,7 +277,7 @@ accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "raref
 plot(accum_curve, xlab = "Samples")
 
 ###########################################
-#ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr)
+#ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
 
 # Initialize a list to store the rarefaction curves for each year
 accum_curves_2021 <- list()
@@ -351,12 +377,11 @@ for (i in 2:length(accum_curves_2022)) {
 }
 legend(x = 170, y = 1000, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
-###########################################
+#conclusion....
 
-
-
-
-
+#######################################################
+# 6.- calculate He for each population (per year per region/province)
+#######################################################
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
 #subset 2022 data
@@ -423,7 +448,7 @@ for (i in seq_along(data_frames)) {
 
 
 #######################################################
-# 5.- Present MOI/eMOI results overall and means per province and region for each year
+# 7.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
 #import  moire results:
@@ -509,9 +534,26 @@ d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, 
   ylim(0, NA)
 d
 
+# naive coi
+e <- ggplot(processed_coi_results, aes(x = region, y = naive_coi, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Region", y = "Naive COI") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+e
+
+f <-ggplot(processed_coi_results, aes(x = province, y = naive_coi, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Province", y = "Naive COI") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+f
+
 
 #######################################################
-# 6.- Calculate He and Fws per locus and means per province and region 
+# 8.- Calculate He and Fws per locus and means per province and region 
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
@@ -528,7 +570,7 @@ if (!("n.alleles" %in% colnames(combined_df))){
 
 # merge with metadata
 colnames(combined_df)[1]<- c("NIDA2")
-combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.x = T)
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.y = T)
 
 # delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
 combined_df_merged <- combined_df_merged %>%
