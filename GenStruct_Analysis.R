@@ -147,7 +147,7 @@ for (i in seq_along(allele_data_list)) {
   
   colnames(df)[1] <- "sample_id"
   
-    df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONS  AND SUMS THE READS. CRITICAL!!!
+    df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE REALLY ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONSAND SUMS THE READS AND FREQS. CRITICAL!!!
     group_by(sample_id, locus, pseudo_cigar) %>%
     summarize(reads = sum(reads),
               norm.reads.locus = sum(norm.reads.locus))
@@ -159,18 +159,72 @@ for (i in seq_along(allele_data_list)) {
 
 names(allele_data_list) <- runs
 
-# Assuming allele_data_list is a list containing data frames
-total_sum <- 0
-
-for(df in allele_data_list) {
-  column_values <- df[[1]]
-  unique_values <- unique(column_values)
-  print(unique_values)
-  total_sum <- total_sum + sum(length(unique_values))
+#get rid of replicate nidas keep the sample with the most reads across runs for each one of the replicates
+sum_reads <- function(df) {
+  aggregate(reads ~ sample_id, data = df, sum)
 }
 
-print(total_sum) #there are controls and other unusable samples here. no problem 'cause when merging with metadata they are left out.
+summed_reads <- lapply(allele_data_list, sum_reads)
 
+# Change colnames of reads for the name of the respective df
+summed_reads <- lapply(names(summed_reads), function(df_name) {
+  df <- summed_reads[[df_name]]
+  names(df)[2] <- df_name
+  return(df)
+})
+
+# Merge all data frames by sample_id
+merged_df_dups <- Reduce(function(x, y) merge(x, y, by = "sample_id", all = TRUE), summed_reads)
+
+#keep rows with replicates
+merged_df_dups <- merged_df_dups[rowSums(is.na(merged_df_dups)) < length(colnames(merged_df_dups)) - 2, ] #keep rows with more than 14 NAs (that is, that have reads in more than one run)
+
+# Exclude the first column and find the column with the maximum value for each row
+merged_df_dups$BEST_RUN <- colnames(merged_df_dups)[apply(merged_df_dups[-1], 1, which.max) + 1]
+
+#did i found all replicates?
+if (all(repeated_nidas_df$NIDA2 %in% merged_df_dups$sample_id)) {
+  print("You found all replicates. Proceed with removal")
+}
+
+#remove replicates, keep the best
+# for (i in seq_along(allele_data_list)) {
+#   df <- allele_data_list[[i]]
+#   sample_id <- df$sample_id
+#   best_run <- merged_df_dups$BEST_RUN[merged_df_dups$sample_id == sample_id]
+#   
+#   print(paste("Best run:", best_run))
+#   print(paste("Current dataframe name:", names(allele_data_list)[i]))
+#   print(paste("Sample ID:", sample_id))
+#   
+#   if (!is.null(best_run) && length(best_run) > 0 && all(!is.na(best_run))) {
+#     if (names(allele_data_list)[i] != best_run) {
+#       allele_data_list[[i]] <- df[!(df$sample_id %in% merged_df_dups$sample_id), ]
+#     }
+#   }
+# }
+
+
+summed_reads <- lapply(allele_data_list, sum_reads)
+
+# Change colnames of reads for the name of the respective df
+summed_reads <- lapply(names(summed_reads), function(df_name) {
+  df <- summed_reads[[df_name]]
+  names(df)[2] <- df_name
+  return(df)
+})
+
+# Merge all data frames by sample_id
+merged_df_dups <- Reduce(function(x, y) merge(x, y, by = "sample_id", all = TRUE), summed_reads)
+
+#keep rows with replicates
+merged_df_dups <- merged_df_dups[rowSums(is.na(merged_df_dups)) < length(colnames(merged_df_dups)) - 2, ] #keep rows with more than 14 NAs (that is, that have reads in more than one run)
+
+
+
+
+
+#save allele_data_list
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
 #######################################################
@@ -524,7 +578,7 @@ rearranged <- melted %>%
 rearranged <- as.data.frame(rearranged)
 rownames(rearranged) <- rearranged$NIDA2
 rearranged <- rearranged[, -1]
-rearranged[is.null(rearranged)] <- 0
+#turn null to 0!!! (Still didn't do it)
 
 ################################################################
 
