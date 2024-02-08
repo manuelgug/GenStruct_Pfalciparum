@@ -572,6 +572,42 @@ rearranged <- rearranged[, -1]
 rearranged <- replace(rearranged, is.na(rearranged), 0)
 
 #pca labels:
+NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
+pca_labels<- db %>% distinct(NIDA2, year, province, region)
+
+if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
+  print("Order of categorical variables is ok.")
+}else{
+  "grab a coffee."
+}
+
+# # Perform PCA on rearranged
+# rearranged <- rearranged %>%
+#   mutate_all(as.numeric)
+# 
+# # Find columns with constant or zero values
+# zero_cols <- sapply(rearranged, function(x) all(x == 0))
+# 
+# # Remove columns with constant or zero values
+# rearranged_filtered <- rearranged[, !zero_cols]
+# 
+# # Perform PCA
+# pca_result <- prcomp(rearranged_filtered, scale. = TRUE)
+# 
+# # Extract PC scores
+# pc_scores <- as.data.frame(pca_result$x)
+# 
+# # Combine PC scores with pca_labels
+# pca_data <- cbind(pc_scores, pca_labels)
+# 
+# # Plot PCA with ggplot
+# ggplot(pca_data, aes(PC1, PC2, color = factor(year))) +
+#   geom_point() +
+#   labs(title = "PCA of rearranged data",
+#        x = "Principal Component 1",
+#        y = "Principal Component 2") +
+#   theme_minimal()
+
 
 
 ################################################################
