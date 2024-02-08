@@ -202,9 +202,113 @@ for (i in seq_along(allele_data_list)) {
   saveRDS(mcmc_results, paste0(run, "_MOIRE-RESULTS.RDS"))
 }
 
+#######################################################
+# 6.- Present MOI/eMOI results overall and means per province and region for each year
+#######################################################
+
+#import  moire results:
+rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+
+moire_results_list <- list()
+
+# Load each RDS file into the list with the file name as the list name
+for (file in rds_files) {
+  file_name <- tools::file_path_sans_ext(basename(file))
+  moire_results_list[[file_name]] <- readRDS(file)
+}
+
+
+# Initialize an empty list to store the processed coi_results
+processed_coi_results <- data.frame()
+
+# Loop through each element in moire_results_list
+for (i in seq_along(moire_results_list)) {
+  # Summarize effective coi and naive coi
+  eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
+  naive_coi <- moire::summarize_coi(moire_results_list[[i]])
+  
+  # Merge the summaries by sample_id
+  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
+  
+  # Add the processed coi_results to the list
+  processed_coi_results <- rbind(processed_coi_results, coi_results)
+}
+
+
+# label mono and poly infections. NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript
+processed_coi_results$polyclonal_from_ecoi_med <- ifelse(processed_coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
+
+#merge with categorical variables, controls are removed automatically
+colnames(processed_coi_results)[1] <- "NIDA2"
+processed_coi_results <- merge(processed_coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
+
+
+# % polyclonal infections on each province and region per year
+polyclonal_percentage_region <- processed_coi_results %>%
+  group_by(region, year) %>%
+  summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
+  ungroup()
+
+a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Region", y = "% Polyclonal Infections") +
+  facet_wrap(~region, scales = "free", ncol = 3) +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()
+a
+
+polyclonal_percentage_province <- processed_coi_results %>%
+  group_by(province, year) %>%
+  summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
+  ungroup()
+
+b <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Province", y = "%Polyclonal Infections") +
+  facet_wrap(~province, scales = "free", ncol = 3) +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()
+b
+
+# post_effective_coi_med
+processed_coi_results$year <- factor(processed_coi_results$year)
+
+c <- ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Region", y = "Post Effective COI Median") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+c
+
+d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Province", y = "Post Effective COI Median") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+d
+
+# naive coi
+e <- ggplot(processed_coi_results, aes(x = region, y = naive_coi, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Region", y = "Naive COI") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+e
+
+f <-ggplot(processed_coi_results, aes(x = province, y = naive_coi, fill = year)) +
+  geom_boxplot() +
+  labs(x = "Province", y = "Naive COI") +
+  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+  theme_minimal()+
+  ylim(0, NA)
+f
+
 
 #######################################################
-# 4.- GENOMIC + DB MERGING
+# 5.- GENOMIC + DB MERGING for He calculation and beyond
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
@@ -235,7 +339,7 @@ if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
 combined_df_merged[is.na(combined_df_merged), ]
 
 #######################################################
-# 5.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
+# 6.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 #######################################################
 
 sample_size_provinces <- combined_df_merged %>%
@@ -253,28 +357,28 @@ sample_size_regions
 ################################### 
 # RAREFACTION CURVES
 
-raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-                                   year = combined_df_merged$year, 
-                                   province = combined_df_merged$province,
-                                   region = combined_df_merged$region,
-                                   locus = combined_df_merged$locus,
-                                   n.alleles = combined_df_merged$n.alleles,
-                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
-
-raref_input <- raref_input %>% distinct()
-
-#subsetting #INIT LOOP
-sub <- raref_input[raref_input$year == 2022 & raref_input$province =="Maputo",] #iterate this 
-
-# Cast the dataframe to wide format
-raref_df <- dcast(sub, NIDA2 ~ locus, value.var = "n.alleles")
-raref_df <- raref_df[, -1]
-raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
-
-
-# CALCULATE CURVE
-accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "rarefaction")
-plot(accum_curve, xlab = "Samples")
+# raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+#                                    year = combined_df_merged$year, 
+#                                    province = combined_df_merged$province,
+#                                    region = combined_df_merged$region,
+#                                    locus = combined_df_merged$locus,
+#                                    n.alleles = combined_df_merged$n.alleles,
+#                                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
+# 
+# raref_input <- raref_input %>% distinct()
+# 
+# #subsetting #INIT LOOP
+# sub <- raref_input[raref_input$year == 2022 & raref_input$province =="Maputo",] #iterate this 
+# 
+# # Cast the dataframe to wide format
+# raref_df <- dcast(sub, NIDA2 ~ locus, value.var = "n.alleles")
+# raref_df <- raref_df[, -1]
+# raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
+# 
+# 
+# # CALCULATE CURVE
+# accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "rarefaction")
+# plot(accum_curve, xlab = "Samples")
 
 ###########################################
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
@@ -380,7 +484,7 @@ legend(x = 170, y = 1000, legend = names(accum_curves_2022), fill = colors, x.in
 #conclusion....
 
 #######################################################
-# 6.- calculate He for each population (per year per region/province)
+# 7.- calculate He for each population (per year per region/province)
 #######################################################
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
@@ -448,112 +552,7 @@ for (i in seq_along(data_frames)) {
 
 
 #######################################################
-# 7.- Present MOI/eMOI results overall and means per province and region for each year
-#######################################################
-
-#import  moire results:
-rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-
-moire_results_list <- list()
-
-# Load each RDS file into the list with the file name as the list name
-for (file in rds_files) {
-  file_name <- tools::file_path_sans_ext(basename(file))
-  moire_results_list[[file_name]] <- readRDS(file)
-}
-
-
-# Initialize an empty list to store the processed coi_results
-processed_coi_results <- data.frame()
-
-# Loop through each element in moire_results_list
-for (i in seq_along(moire_results_list)) {
-  # Summarize effective coi and naive coi
-  eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
-  naive_coi <- moire::summarize_coi(moire_results_list[[i]])
-  
-  # Merge the summaries by sample_id
-  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
-  
-  # Add the processed coi_results to the list
-  processed_coi_results <- rbind(processed_coi_results, coi_results)
-}
-
-
-# label mono and poly infections. NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript
-processed_coi_results$polyclonal_from_ecoi_med <- ifelse(processed_coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
-
-#merge with categorical variables, controls are removed automatically
-colnames(processed_coi_results)[1] <- "NIDA2"
-processed_coi_results <- merge(processed_coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
-
-
-# % polyclonal infections on each province and region per year
-polyclonal_percentage_region <- processed_coi_results %>%
-  group_by(region, year) %>%
-  summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
-  ungroup()
-
-a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(x = "Region", y = "% Polyclonal Infections") +
-  facet_wrap(~region, scales = "free", ncol = 3) +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()
-a
-
-polyclonal_percentage_province <- processed_coi_results %>%
-  group_by(province, year) %>%
-  summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
-  ungroup()
-
-b <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(x = "Province", y = "%Polyclonal Infections") +
-  facet_wrap(~province, scales = "free", ncol = 3) +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()
-b
-
-# post_effective_coi_med
-processed_coi_results$year <- factor(processed_coi_results$year)
-
-c <- ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Region", y = "Post Effective COI Median") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
-c
-
-d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Province", y = "Post Effective COI Median") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
-d
-
-# naive coi
-e <- ggplot(processed_coi_results, aes(x = region, y = naive_coi, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Region", y = "Naive COI") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
-e
-
-f <-ggplot(processed_coi_results, aes(x = province, y = naive_coi, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Province", y = "Naive COI") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
-f
-
-
-#######################################################
-# 8.- Calculate He and Fws per locus and means per province and region 
+# 8.- He and Fws results
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
