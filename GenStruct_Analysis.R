@@ -148,10 +148,12 @@ for (i in seq_along(allele_data_list)) {
   colnames(df)[1] <- "sample_id"
   
     df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE REALLY ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONSAND SUMS THE READS AND FREQS. CRITICAL!!!
-    group_by(sample_id, locus, pseudo_cigar) %>%
-    summarize(reads = sum(reads),
-              norm.reads.locus = sum(norm.reads.locus))
-  
+      group_by(sample_id, locus, pseudo_cigar) %>%
+      summarize(reads = sum(reads),
+                norm.reads.locus = sum(norm.reads.locus)) %>%
+      mutate(allele = paste(locus, ".", row_number(), sep = ""))
+    
+    
   # Update the modified data frame back in the list
   df<- as.data.frame(df)
   allele_data_list[[i]] <- df
@@ -186,9 +188,8 @@ merged_df_dups$BEST_RUN <- colnames(merged_df_dups)[apply(merged_df_dups[-1], 1,
 if (all(repeated_nidas_df$NIDA2 %in% merged_df_dups$sample_id)) {
   print("You found all replicates. Proceed with removal")
 }else{
-  "grab a coffe"
+  "grab a coffee"
 }
-
 
 #remove replicates, keep the best
 for (i in 1:nrow(merged_df_dups)) {
@@ -219,7 +220,7 @@ merged_df_dups <- merged_df_dups[rowSums(is.na(merged_df_dups)) < length(colname
 if (dim(merged_df_dups)[1] == 0){
   print("NO MORE REPLICATES.")
 }else{
-  "grab a coffe"
+  "grab a coffee"
 }
 
 #save allele_data_list
@@ -570,7 +571,7 @@ rownames(rearranged) <- rearranged$NIDA2
 rearranged <- rearranged[, -1]
 rearranged <- replace(rearranged, is.na(rearranged), 0)
 
-
+#pca labels:
 
 
 ################################################################
