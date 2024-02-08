@@ -147,7 +147,13 @@ for (i in seq_along(allele_data_list)) {
   
   colnames(df)[1] <- "sample_id"
   
+    df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONS  AND SUMS THE READS. CRITICAL!!!
+    group_by(sample_id, locus, pseudo_cigar) %>%
+    summarize(reads = sum(reads),
+              norm.reads.locus = sum(norm.reads.locus))
+  
   # Update the modified data frame back in the list
+  df<- as.data.frame(df)
   allele_data_list[[i]] <- df
 }
 
@@ -167,12 +173,50 @@ print(total_sum) #there are controls and other unusable samples here. no problem
 
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
+#######################################################
+# 3.- GENOMIC + DB MERGING for He calculation and beyond
+#######################################################
+
+allele_data_list <- readRDS("allele_data_list.RDS")
+
+# concat all dataframes together
+combined_df <- bind_rows(allele_data_list)
+
+# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
+if (!("n.alleles" %in% colnames(combined_df))){
+  combined_df <- combined_df %>%
+    group_by(sample_id, locus) %>%
+    mutate(n.alleles = n_distinct(pseudo_cigar))
+}
+
+# merge with metadata
+colnames(combined_df)[1]<- c("NIDA2")
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region", "run_id")], by="NIDA2", all.y = T)
+
+# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
+combined_df_merged <- combined_df_merged %>%
+  filter(!is.na(year) & !is.na(province) & !is.na(region))
+
+#sanity check
+if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
+  print("All nidas in combined_merged_df are also in the metadata db ✅")
+}
+
+
+#----- ya sólo queda el problema de los duplicados..., ya no hay múltiplies alelos falsos luego de corregir lo que dijo andrés en slack---------------------
+combined_df_merged
+dup <- combined_df_merged[duplicated(combined_df_merged[, c("NIDA2", "locus", "pseudo_cigar")]), ]
+
+sum(is.na(dup$NIDA2 %in% repeated_nidas_df$NIDA2))
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
 ######################################################################
 #----------------------------ANALYZE DATA----------------------------#
 ######################################################################
 
 #######################################################
-# 3.- calculate MOI and eMOI for each run
+# 4.- calculate MOI and eMOI for each run
 #######################################################
 # calculating from each run even though not all samples are gonna be used for the analysis. more info == better moi calculation so np
 
@@ -203,7 +247,7 @@ for (i in seq_along(allele_data_list)) {
 }
 
 #######################################################
-# 6.- Present MOI/eMOI results overall and means per province and region for each year
+# 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
 #import  moire results:
@@ -241,7 +285,6 @@ processed_coi_results$polyclonal_from_ecoi_med <- ifelse(processed_coi_results$p
 #merge with categorical variables, controls are removed automatically
 colnames(processed_coi_results)[1] <- "NIDA2"
 processed_coi_results <- merge(processed_coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
-
 
 # % polyclonal infections on each province and region per year
 polyclonal_percentage_region <- processed_coi_results %>%
@@ -306,38 +349,6 @@ f <-ggplot(processed_coi_results, aes(x = province, y = naive_coi, fill = year))
   ylim(0, NA)
 f
 
-
-#######################################################
-# 5.- GENOMIC + DB MERGING for He calculation and beyond
-#######################################################
-
-allele_data_list <- readRDS("allele_data_list.RDS")
-
-# concat all dataframes together
-combined_df <- bind_rows(allele_data_list)
-
-# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
-if (!("n.alleles" %in% colnames(combined_df))){
-  combined_df <- combined_df %>%
-    group_by(sample_id, locus) %>%
-    mutate(n.alleles = n_distinct(allele))
-}
-
-# merge with metadata
-colnames(combined_df)[1]<- c("NIDA2")
-combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.y = T)
-
-# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
-combined_df_merged <- combined_df_merged %>%
-  filter(!is.na(year) & !is.na(province) & !is.na(region))
-
-#sanity check
-if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
-  print("All nidas in combined_merged_df are also in the metadata db ✅")
-}
-
-combined_df_merged[is.na(combined_df_merged), ]
-
 #######################################################
 # 6.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 #######################################################
@@ -382,6 +393,16 @@ sample_size_regions
 
 ###########################################
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
+
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                                    year = combined_df_merged$year, 
+                                    province = combined_df_merged$province,
+                                    region = combined_df_merged$region,
+                                    locus = combined_df_merged$locus,
+                                    n.alleles = combined_df_merged$n.alleles,
+                                    norm.reads.locus = combined_df_merged$norm.reads.locus,
+                                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
+                                    run_id = combined_df_merged$run_id))
 
 # Initialize a list to store the rarefaction curves for each year
 accum_curves_2021 <- list()
@@ -472,20 +493,46 @@ plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumula
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
-legend(x = 65, y = 1100, legend = names(accum_curves_2021), fill = colors)
+legend(x = 65, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 # Plot the curves for 2022
 plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022", xlim = c(0,200), ylim = c(0,3000))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
-legend(x = 170, y = 1000, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+legend(x = 160, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 #conclusion....
+
+########################
+###### PCA ########
+########################
+
+# Melt the data frame to convert it from wide to long format
+melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
+melted<-melted[,-3]
+
+library(tidyr)
+
+rearranged <- melted %>%
+  pivot_wider(
+    names_from = value,
+    values_from = norm.reads.locus
+  )
+
+# format
+rearranged <- as.data.frame(rearranged)
+rownames(rearranged) <- rearranged$NIDA2
+rearranged <- rearranged[, -1]
+rearranged[is.null(rearranged)] <- 0
+
+################################################################
+
 
 #######################################################
 # 7.- calculate He for each population (per year per region/province)
 #######################################################
+
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
 #subset 2022 data
@@ -554,26 +601,6 @@ for (i in seq_along(data_frames)) {
 #######################################################
 # 8.- He and Fws results
 #######################################################
-
-allele_data_list <- readRDS("allele_data_list.RDS")
-
-# concat all dataframes together
-combined_df <- bind_rows(allele_data_list)
-
-# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
-if (!("n.alleles" %in% colnames(combined_df))){
-  combined_df <- combined_df %>%
-    group_by(sample_id, locus) %>%
-    mutate(n.alleles = n_distinct(allele))
-}
-
-# merge with metadata
-colnames(combined_df)[1]<- c("NIDA2")
-combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region")], by="NIDA2", all.y = T)
-
-# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
-combined_df_merged <- combined_df_merged %>%
-  filter(!is.na(year) & !is.na(province) & !is.na(region))
 
 # calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
 combined_df_merged <- combined_df_merged %>%
