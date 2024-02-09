@@ -770,27 +770,67 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
 
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
+#subset 2021 data
+combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
+#subset 2022 data
+combined_df_merged_2022 <- combined_df_merged[combined_df_merged$year == "2022", ]
+
+## 2021 samples ##
 #format data
-dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+dsmp <- formatDat(combined_df_merged_2021, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
 str(dsmp, list.len = 2)
 
-# formatmetadata
-meta <- unique(combined_df_merged[c("NIDA2", "year","region", "province")])
+# format metadata
+meta <- unique(combined_df_merged_2021[c("NIDA2", "region")])
 meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 
 #estimate naive coi
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
+min(coi)
 coi[coi == 0] <- 1 #COPE, I DON'T KNOW WHY I'M GETTING COI OF ZERO SOMETIMES (probably some formatting issue with the input df... CHECK IN DEPTH. THIS ALLOWS ibDat FUNCTION TO RUN WITHOUT ERRORS, BUT I DON'T KNOW WHAT'S GOING ON
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
 str(afreq, list.len = 2)
 
-#calculate ibd #ERROR, PROBABLY FORMAT
+#calculate ibd
 dres0 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                 alpha = 0.05, nr = 1e3)  
 
+regions <- unique(meta$region)
+nsite     <- table(meta$region)[regions]
+ord       <- order(factor(meta$region, levels = regions))
+dsmp <- dsmp[ord]
+coi  <- coi[ ord]
+
+par(mar = c(3, 3, 1, 1))
+alpha <- 0.05                          # significance level                    
+dmat <- dres0[, , "estimate"]
+# create symmetric matrix
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]  
+# determine significant, reverse columns for upper triangle
+isig <- which(dres0[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
+plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
+        col_id = c(3:4)[factor(meta$region)]) 
+
+
+
+layout(matrix(1:2, 1), width = c(7, 1))
+par(mar = c(1, 1, 2, 1))
+atsep <- cumsum(nsite)[-length(nsite)]
+plotRel(dmat, draw_diag = TRUE, isig = rbind(isig, isig[, 2:1]))
+atclin <- cumsum(nsite) - nsite/2
+abline(v = atsep, h = atsep, col = "gray45", lty = 5)
+mtext(regions, side = 3, at = atclin, line = 0.2)
+mtext(regions, side = 2, at = atclin, line = 0.2)
+par(mar = c(1, 0, 2, 3))
+plotColorbar()
+
+
+## 2022 samples ##
 
 
 #######################################################
