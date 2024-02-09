@@ -688,21 +688,24 @@ if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
   "grab a coffee."
 }
 
-
-# # Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
-rearranged_pres_abs <- rearranged %>%
-   mutate_all(~ ifelse(. > 0, 1, .))
-
-
-# Perform PCA on rearranged
+# format freq df
 rearranged <- rearranged %>%
   mutate_all(as.numeric)
 
-# Find columns with constant or zero values
 zero_cols <- sapply(rearranged, function(x) all(x == 0))
 rearranged_filtered <- rearranged[, !zero_cols]
 
-# Perform PCA
+ # Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
+rearranged_pres_abs <- rearranged %>%
+    mutate_all(~ ifelse(. > 0, 1, .))
+
+rearranged_pres_abs <- rearranged_pres_abs %>%
+  mutate_all(as.numeric)
+
+
+### MAKE THE PCA A FUNCTION ON WHICH YOU CAN CHOOSE INPUT: (PRESENCE/ABSENCE OR FREQS) AND THE VARIABLES TO TEST (JOINED OR SIMPLE)
+
+# Perform PCA on rearranged
 pca_result <- prcomp(rearranged_filtered, scale. = FALSE)
 pc_scores <- as.data.frame(pca_result$x)
 pca_data <- cbind(pc_scores, pca_labels)  # Make sure pca_labels is defined
@@ -712,16 +715,51 @@ pcs <- as.data.frame(pca_result$x)  # principal components
 variance <- pca_result$sdev^2  # variance of each principal component
 prop_variance <- variance / sum(variance)  # proportion of variance explained by each component
 
+# Generate contrasting colors from RColorBrewer palette
+num_colors <- length(unique(factor(paste0(pca_data$region, "_", pca_data$year))))
+set.seed(690)
+Set1_colors <- brewer.pal(9, "Set1")
+Set2_colors <- brewer.pal(8, "Set2")
+mixed_colors <- c(Set1_colors, Set2_colors)
+random_colors <- sample(mixed_colors, num_colors)
+
 # Plot PCA with ggplot including sample labels
-ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(year,province)), label = rownames(pca_data))) +
-  geom_point() +
-  #geom_text_repel() +  # Add text labels with repulsion to avoid overlap
+ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(region, "_", year)), label = rownames(pca_data))) +
+  geom_point(size = 3, alpha = 0.8) +
   labs(title = "PCA of Genetic Content",
        x = paste0("PC1 (", round(prop_variance[1] * 100, 2), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)"))  +
+       y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)")) +
+  scale_color_manual(values = random_colors) +
   theme_minimal()
  
-################################################################
+#TSNE
+library(Rtsne)
+
+set.seed(420)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 2e4, num_threads = 0)
+set.seed(420)
+tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 2e4, num_threads = 0)
+
+# Convert t-SNE results to data frame
+labels <- factor(paste0(pca_data$region, pca_data$year))
+tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
+tsne_data_freqs$labels <- labels
+tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+tsne_data_pres_abs$labels <- labels
+
+# Plot t-SNE of freqs
+ggplot(tsne_data_freqs, aes(V1, V2, color = labels)) +
+  geom_point(size = 3, alpha = 0.7) +
+  labs(title = "t-SNE of Genetic Content (allele frequency)",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
+
+# Plot t-SNE of presence/absence
+ggplot(tsne_data_pres_abs, aes(V1, V2, color = labels)) +
+  geom_point(size = 3, alpha = 0.7) +
+  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
 
 
 #######################################################
