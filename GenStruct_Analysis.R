@@ -255,6 +255,8 @@ if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
   print("All nidas in combined_merged_df are also in the metadata db ✅")
 }
 
+#save allele_data_list
+saveRDS(combined_df_merged, "combined_df_merged.RDS")
 
 ######################################################################
 #----------------------------ANALYZE DATA----------------------------#
@@ -302,6 +304,7 @@ moire_results_list <- list()
 
 # Load each RDS file into the list with the file name as the list name
 for (file in rds_files) {
+  print(file)
   file_name <- tools::file_path_sans_ext(basename(file))
   moire_results_list[[file_name]] <- readRDS(file)
 }
@@ -449,6 +452,8 @@ raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2,
                                     allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
                                     run_id = combined_df_merged$run_id))
 
+# PROVINCE
+
 # Initialize a list to store the rarefaction curves for each year
 accum_curves_2021 <- list()
 accum_curves_2022 <- list()
@@ -534,20 +539,122 @@ for (province in unique_provinces) {
 colors <- brewer.pal(9, "Paired")
 
 # Plot the curves for 2021
-plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021", xlim = c(0,85), ylim = c(0,2700))
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Province)", xlim = c(0,85), ylim = c(0,2700))
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 65, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022", xlim = c(0,200), ylim = c(0,3000))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,3000))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 160, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 #conclusion....
+
+# REGION
+
+# Initialize a list to store the rarefaction curves for each year
+accum_curves_2021 <- list()
+accum_curves_2022 <- list()
+
+# Get unique years and provinces
+unique_provinces <- unique(raref_input$region)
+
+# Iterate over each region
+for (region in unique_provinces) {
+  
+  print(region)
+  
+  # Subsetting the data for 2021
+  sub_2021 <- raref_input[raref_input$year == 2021 & raref_input$region == region, ]
+  
+  # Check if there are unique NIDA2s for 2021
+  if (length(unique(sub_2021$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2021
+    unique_alleles_2021 <- list()
+    
+    # Iterate over each unique NIDA2 for 2021
+    for (nida in unique(sub_2021$NIDA2)) {
+      subset_data <- sub_2021[sub_2021$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2021[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2021
+    all_unique_alleles_2021 <- unique(unlist(unique_alleles_2021))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2021
+    presence_matrix_2021 <- sapply(unique_alleles_2021, function(x) {
+      as.integer(all_unique_alleles_2021 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2021
+    presence_df_2021 <- as.data.frame(presence_matrix_2021)
+    presence_df_2021 <- t(presence_df_2021)
+    rownames(presence_df_2021) <- names(unique_alleles_2021)
+    colnames(presence_df_2021) <- all_unique_alleles_2021
+    
+    # CALCULATE CURVE for 2021
+    accum_curve_2021 <- specaccum(presence_df_2021, 'random', permutations = 100)
+    accum_curves_2021[[region]] <- accum_curve_2021
+  }
+  
+  # Subsetting the data for 2022
+  sub_2022 <- raref_input[raref_input$year == 2022 & raref_input$region == region, ]
+  
+  # Check if there are unique NIDA2s for 2022
+  if (length(unique(sub_2022$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2022
+    unique_alleles_2022 <- list()
+    
+    # Iterate over each unique NIDA2 for 2022
+    for (nida in unique(sub_2022$NIDA2)) {
+      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2022
+    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2022
+    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
+      as.integer(all_unique_alleles_2022 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2022
+    presence_df_2022 <- as.data.frame(presence_matrix_2022)
+    presence_df_2022 <- t(presence_df_2022)
+    rownames(presence_df_2022) <- names(unique_alleles_2022)
+    colnames(presence_df_2022) <- all_unique_alleles_2022
+    
+    # CALCULATE CURVE for 2022
+    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
+    accum_curves_2022[[region]] <- accum_curve_2022
+  }
+}
+
+# Select 3 colors from the Paired palette
+colors <- brewer.pal(3, "Paired")
+
+# Plot the curves for 2021
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Region)", xlim = c(0,150), ylim = c(0,3000))
+for (i in 2:length(accum_curves_2021)) {
+  lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
+}
+legend(x = 120, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+
+# Plot the curves for 2022
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,500), ylim = c(0,4000))
+for (i in 2:length(accum_curves_2022)) {
+  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
+}
+legend(x = 400, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+
+
 
 ########################
 ###### PCA ########
@@ -581,35 +688,39 @@ if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
   "grab a coffee."
 }
 
-# # Perform PCA on rearranged
-# rearranged <- rearranged %>%
-#   mutate_all(as.numeric)
-# 
-# # Find columns with constant or zero values
-# zero_cols <- sapply(rearranged, function(x) all(x == 0))
-# 
-# # Remove columns with constant or zero values
-# rearranged_filtered <- rearranged[, !zero_cols]
-# 
-# # Perform PCA
-# pca_result <- prcomp(rearranged_filtered, scale. = TRUE)
-# 
-# # Extract PC scores
-# pc_scores <- as.data.frame(pca_result$x)
-# 
-# # Combine PC scores with pca_labels
-# pca_data <- cbind(pc_scores, pca_labels)
-# 
-# # Plot PCA with ggplot
-# ggplot(pca_data, aes(PC1, PC2, color = factor(year))) +
-#   geom_point() +
-#   labs(title = "PCA of rearranged data",
-#        x = "Principal Component 1",
-#        y = "Principal Component 2") +
-#   theme_minimal()
+
+# # Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
+rearranged_pres_abs <- rearranged %>%
+   mutate_all(~ ifelse(. > 0, 1, .))
 
 
+# Perform PCA on rearranged
+rearranged <- rearranged %>%
+  mutate_all(as.numeric)
 
+# Find columns with constant or zero values
+zero_cols <- sapply(rearranged, function(x) all(x == 0))
+rearranged_filtered <- rearranged[, !zero_cols]
+
+# Perform PCA
+pca_result <- prcomp(rearranged_filtered, scale. = FALSE)
+pc_scores <- as.data.frame(pca_result$x)
+pca_data <- cbind(pc_scores, pca_labels)  # Make sure pca_labels is defined
+
+# Extract PCA results
+pcs <- as.data.frame(pca_result$x)  # principal components
+variance <- pca_result$sdev^2  # variance of each principal component
+prop_variance <- variance / sum(variance)  # proportion of variance explained by each component
+
+# Plot PCA with ggplot including sample labels
+ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(year,province)), label = rownames(pca_data))) +
+  geom_point() +
+  #geom_text_repel() +  # Add text labels with repulsion to avoid overlap
+  labs(title = "PCA of Genetic Content",
+       x = paste0("PC1 (", round(prop_variance[1] * 100, 2), "%)"),
+       y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)"))  +
+  theme_minimal()
+ 
 ################################################################
 
 
