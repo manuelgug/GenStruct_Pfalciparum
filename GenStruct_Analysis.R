@@ -758,6 +758,38 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape 
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
 
+#######################################################
+# 7.- Fst: Genetic differentiation (Fst) between provinces and regions
+#######################################################
+
+
+#######################################################
+# 8.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
+#######################################################
+
+library(dcifer)
+pardef <- par(no.readonly = TRUE)
+
+#format data
+dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+str(dsmp, list.len = 2)
+
+# formatmetadata
+meta <- unique(combined_df_merged[c("NIDA2", "year","region", "province")])
+meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
+
+#estimate naive coi
+lrank <- 2
+coi   <- getCOI(dsmp, lrank = lrank)
+
+#estimate allele freqs
+afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
+str(afreq, list.len = 2)
+
+#calculate ibd #ERROR, PROBABLY FORMAT
+dres0 <- ibdDat(dsmp, coi, afreq, pval = TRUE, confint = TRUE, rnull = 0, 
+                alpha = 0.05, nr = 1e3)  
+
 
 #######################################################
 # 7.- calculate He for each population (per year per region/province)
