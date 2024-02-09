@@ -736,27 +736,24 @@ ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(region, "_", year)), label 
 library(Rtsne)
 
 set.seed(420)
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 2e4, num_threads = 0)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
 set.seed(420)
-tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 2e4, num_threads = 0)
+tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
 
 # Convert t-SNE results to data frame
-labels <- factor(paste0(pca_data$region, pca_data$year))
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-tsne_data_freqs$labels <- labels
 tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
-tsne_data_pres_abs$labels <- labels
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = labels)) +
-  geom_point(size = 3, alpha = 0.7) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
+  geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
 
 # Plot t-SNE of presence/absence
-ggplot(tsne_data_pres_abs, aes(V1, V2, color = labels)) +
-  geom_point(size = 3, alpha = 0.7) +
+ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
+  geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
