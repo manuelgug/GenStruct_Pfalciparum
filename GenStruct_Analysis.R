@@ -781,14 +781,16 @@ meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 #estimate naive coi
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
+coi[coi == 0] <- 1 #COPE, I DON'T KNOW WHY I'M GETTING COI OF ZERO SOMETIMES (probably some formatting issue with the input df... CHECK IN DEPTH. THIS ALLOWS ibDat FUNCTION TO RUN WITHOUT ERRORS, BUT I DON'T KNOW WHAT'S GOING ON
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
 str(afreq, list.len = 2)
 
 #calculate ibd #ERROR, PROBABLY FORMAT
-dres0 <- ibdDat(dsmp, coi, afreq, pval = TRUE, confint = TRUE, rnull = 0, 
+dres0 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                 alpha = 0.05, nr = 1e3)  
+
 
 
 #######################################################
