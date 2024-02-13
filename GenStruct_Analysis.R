@@ -317,8 +317,8 @@ colnames(combined_df_merged)[1]<- c("sample_id")
 
 # set MOIRE parameters
 dat_filter <- moire::load_long_form_data(combined_df_merged)
-burnin <- 5e3
-num_samples <- 5e3
+burnin <- 2.5e3
+num_samples <- 2.5e3
 pt_chains <- seq(1, .5, length.out = 20)
 
 # run moire
@@ -828,13 +828,14 @@ combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021",
 #subset 2022 data
 combined_df_merged_2022 <- combined_df_merged[combined_df_merged$year == "2022", ]
 
+
 ## 2021 samples ##
 #format data
 dsmp <- formatDat(combined_df_merged_2021, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
 str(dsmp, list.len = 2)
 
 # format metadata
-meta <- unique(combined_df_merged_2021[c("NIDA2", "region")])
+meta <- unique(combined_df_merged_2021[c("NIDA2", "region", "province")])
 meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 
 #estimate naive coi
@@ -848,41 +849,53 @@ afreq <- calcAfreq(dsmp, coi, tol = 1e-5)
 str(afreq, list.len = 2)
 
 #calculate ibd
-dres0 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
-                alpha = 0.05, nr = 1e3)  
-
-regions <- unique(meta$region)
-nsite     <- table(meta$region)[regions]
-ord       <- order(factor(meta$region, levels = regions))
-dsmp <- dsmp[ord]
-coi  <- coi[ ord]
+dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
+                 alpha = 0.05, nr = 1e3)  
 
 par(mar = c(3, 3, 1, 1))
 alpha <- 0.05                          # significance level                    
-dmat <- dres0[, , "estimate"]
+dmat <- dres0_2021[, , "estimate"]
 # create symmetric matrix
 dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]  
 # determine significant, reverse columns for upper triangle
-isig <- which(dres0[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
+isig <- which(dres0_2021[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
 plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
-        col_id = c(3:4)[factor(meta$region)]) 
-
-
-
-layout(matrix(1:2, 1), width = c(7, 1))
-par(mar = c(1, 1, 2, 1))
-atsep <- cumsum(nsite)[-length(nsite)]
-plotRel(dmat, draw_diag = TRUE, isig = rbind(isig, isig[, 2:1]))
-atclin <- cumsum(nsite) - nsite/2
-abline(v = atsep, h = atsep, col = "gray45", lty = 5)
-mtext(regions, side = 3, at = atclin, line = 0.2)
-mtext(regions, side = 2, at = atclin, line = 0.2)
-par(mar = c(1, 0, 2, 3))
-plotColorbar()
+        col_id = c(1:10)[factor(meta$province)]) 
 
 
 ## 2022 samples ##
 
+#format data
+dsmp <- formatDat(combined_df_merged_2022, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+str(dsmp, list.len = 2)
+
+# format metadata
+meta <- unique(combined_df_merged_2021[c("NIDA2", "region", "province")])
+meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
+
+#estimate naive coi
+lrank <- 2
+coi   <- getCOI(dsmp, lrank = lrank)
+min(coi)
+coi[coi == 0] <- 1 #COPE, I DON'T KNOW WHY I'M GETTING COI OF ZERO SOMETIMES (probably some formatting issue with the input df... CHECK IN DEPTH. THIS ALLOWS ibDat FUNCTION TO RUN WITHOUT ERRORS, BUT I DON'T KNOW WHAT'S GOING ON
+
+#estimate allele freqs
+afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
+str(afreq, list.len = 2)
+
+#calculate ibd
+dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
+                alpha = 0.05, nr = 1e3)  
+
+par(mar = c(3, 3, 1, 1))
+alpha <- 0.05                          # significance level                    
+dmat <- dres0_2022[, , "estimate"]
+# create symmetric matrix
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]  
+# determine significant, reverse columns for upper triangle
+isig <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
+plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
+        col_id = c(1:10)[factor(meta$province)]) 
 
 #######################################################
 # 7.- calculate He for each population (per year per region/province)
