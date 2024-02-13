@@ -144,13 +144,15 @@ for (i in seq_along(allele_data_list)) {
   df$sampleID <- gsub("_", ".", df$sampleID)
   df$sampleID <- gsub("-", ".", df$sampleID)
   df$sampleID <- gsub("N", "", df$sampleID)
+  df$sampleID <- gsub("\\.0", "", df$sampleID)
   
   colnames(df)[1] <- "sample_id"
   
     df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE REALLY ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONSAND SUMS THE READS AND FREQS. CRITICAL!!!
       group_by(sample_id, locus, pseudo_cigar) %>%
       summarize(reads = sum(reads),
-                norm.reads.locus = sum(norm.reads.locus)) %>%
+                norm.reads.locus = sum(norm.reads.locus),
+                Category = first(Category)) %>%
       mutate(allele = paste(locus, ".", row_number(), sep = ""))
     
     
@@ -262,16 +264,49 @@ if (!("n.alleles" %in% colnames(combined_df))){
 
 # merge with metadata
 colnames(combined_df)[1]<- c("NIDA2")
-combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region", "run_id")], by="NIDA2", all.y = T)
+combined_df_merged <- merge(combined_df, db[c("NIDA2", "year", "province", "region", "run_id")], by="NIDA2", all.y =T) #forcing adding all db nidas
 
-# delete rows that have NA in "year", "province" and "region" columns: those are samples NOT in the db, thus, not to be incorporated into the analysis.
-combined_df_merged <- combined_df_merged %>%
-  filter(!is.na(year) & !is.na(province) & !is.na(region))
+#check for columns with NAs. THESE SAMPLES WERE BAD QUALITY AND THUS FILTERED OUT DURING CONTAMINANTS FILTERING
+removed_samples <- combined_df_merged[is.na(combined_df_merged$Category),]
+removed_samples$NIDA2
+
+# Remove rows with NIDA2 matching values in removed_samples
+combined_df_merged <- combined_df_merged[!combined_df_merged$NIDA2 %in% removed_samples$NIDA2, ]
+
 
 #sanity check
-if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
-  print("All nidas in combined_merged_df are also in the metadata db ✅")
+if (sum(is.na(combined_df_merged)) == 0){
+  print("No NAs.")
+}else{
+  print("grab a coffee.")
 }
+
+if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
+  print("All nidas in combined_merged_df are also the metadata db. No weird samples.✅")
+}else{
+  print("grab another coffee.")
+}
+
+# if (length(unique(db$NIDA2)) == length(unique(combined_df_merged$NIDA2))){
+#   print("same amount of samples in metadata db and combined_merged_df")
+# }else{
+#   print("cocaine maybe?")
+# }
+
+#KEEP ONLY DIVERTSITY LOCI!
+# are there samples with no Diversity loci sequenced?
+unique_categories <- combined_df_merged %>%
+  group_by(NIDA2) %>%
+  summarize(unique_categories = toString(unique(Category)))
+
+more_removed_sample <- unique_categories[!grepl("Diversity", unique_categories$unique_categories), ] # 1 sample didn't have diversity loci, probably due to a missing pool or something... no problem.
+more_removed_sample
+
+combined_df_merged <- combined_df_merged[combined_df_merged$Category == "Diversity",] 
+
+SS <- length(unique(combined_df_merged$NIDA2))
+
+cat("Final sample size is", as.character(SS))
 
 #save allele_data_list
 saveRDS(combined_df_merged, "combined_df_merged.RDS")
@@ -852,6 +887,8 @@ str(afreq, list.len = 2)
 dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                  alpha = 0.05, nr = 1e3)  
 
+#saveRDS(dres0_2021, "dres0_2021.RDS")
+
 par(mar = c(3, 3, 1, 1))
 alpha <- 0.05                          # significance level                    
 dmat <- dres0_2021[, , "estimate"]
@@ -860,7 +897,7 @@ dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]
 # determine significant, reverse columns for upper triangle
 isig <- which(dres0_2021[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
 plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
-        col_id = c(1:10)[factor(meta$province)]) 
+        col_id = c(1:10)[factor(meta$region)]) 
 
 
 ## 2022 samples ##
@@ -886,6 +923,8 @@ str(afreq, list.len = 2)
 #calculate ibd
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                 alpha = 0.05, nr = 1e3)  
+
+#saveRDS(dres0_2022, "dres0_2022.RDS")
 
 par(mar = c(3, 3, 1, 1))
 alpha <- 0.05                          # significance level                    
