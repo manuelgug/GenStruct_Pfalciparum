@@ -762,7 +762,7 @@ rearranged <- replace(rearranged, is.na(rearranged), 0)
 
 #pca labels:
 NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
-pca_labels<- db %>% distinct(NIDA2, year, province, region)
+pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region)
 
 if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
   print("Order of categorical variables is ok.")
