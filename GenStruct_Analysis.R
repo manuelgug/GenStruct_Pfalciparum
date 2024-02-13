@@ -223,6 +223,24 @@ if (dim(merged_df_dups)[1] == 0){
   "grab a coffee"
 }
 
+# Define a function to filter rows based on criteria: remove controls, basically
+filter_rows <- function(df) {
+  # Filter rows based on criteria
+  filtered_df <- df[!grepl("^[A-Za-z]|3D", df$sample_id), ]
+  return(filtered_df)
+}
+
+# Apply the filter_rows function to each dataframe in allele_data_list
+allele_data_list <- lapply(allele_data_list, filter_rows)
+
+#visual check:
+for (df in allele_data_list) {
+  cat("sample size:", as.character(length(unique(df$sample_id))))
+  cat("\n")
+  print(unique(df$sample_id))
+  
+}
+
 #save allele_data_list
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
@@ -267,75 +285,102 @@ saveRDS(combined_df_merged, "combined_df_merged.RDS")
 #######################################################
 # calculating from each run even though not all samples are gonna be used for the analysis. more info == better moi calculation so np
 
-allele_data_list <- readRDS("allele_data_list.RDS") 
+# allele_data_list <- readRDS("allele_data_list.RDS") 
+# 
+# # Iterate over each element in allele_data_list
+# for (i in seq_along(allele_data_list)) {
+#   run <- names(allele_data_list)[i]
+#   df <- allele_data_list[[i]]
+#   print(run)
+#   
+#   # set MOIRE parameters
+#   dat_filter <- moire::load_long_form_data(df)
+#   burnin <- 1e4
+#   num_samples <- 1e4
+#   pt_chains <- seq(1, .5, length.out = 20)
+#   
+#   # run moire
+#   mcmc_results <- moire::run_mcmc(
+#     dat_filter, is_missing = dat_filter$is_missing,
+#     verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+#     pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+#     thin = 10
+#   )
+#   
+#   # checkpoint
+#   saveRDS(mcmc_results, paste0(run, "_MOIRE-RESULTS.RDS"))
+# }
 
-# Iterate over each element in allele_data_list
-for (i in seq_along(allele_data_list)) {
-  run <- names(allele_data_list)[i]
-  df <- allele_data_list[[i]]
-  print(run)
-  
-  # set MOIRE parameters
-  dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
-  pt_chains <- seq(1, .5, length.out = 20)
-  
-  # run moire
-  mcmc_results <- moire::run_mcmc(
-    dat_filter, is_missing = dat_filter$is_missing,
-    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-    thin = 10
-  )
-  
-  # checkpoint
-  saveRDS(mcmc_results, paste0(run, "_MOIRE-RESULTS.RDS"))
-}
+combined_df_merged <- readRDS("combined_df_merged.RDS") 
+
+colnames(combined_df_merged)[1]<- c("sample_id")
+
+# set MOIRE parameters
+dat_filter <- moire::load_long_form_data(combined_df_merged)
+burnin <- 5e3
+num_samples <- 5e3
+pt_chains <- seq(1, .5, length.out = 20)
+
+# run moire
+mcmc_results <- moire::run_mcmc(
+  dat_filter, is_missing = dat_filter$is_missing,
+  verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
+  pt_chains = pt_chains, pt_num_threads = length(pt_chains),
+  thin = 10)
+
+saveRDS(mcmc_results, "all_1329_samples_MOIRE-RESULTS.RDS")
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
 #import  moire results:
-rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+# rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
 
-moire_results_list <- list()
+# moire_results_list <- list()
+# 
+# # Load each RDS file into the list with the file name as the list name
+# for (file in rds_files) {
+#   print(file)
+#   file_name <- tools::file_path_sans_ext(basename(file))
+#   moire_results_list[[file_name]] <- readRDS(file)
+# }
+# 
+# 
+# # Initialize an empty list to store the processed coi_results
+# processed_coi_results <- data.frame()
+# 
+# # Loop through each element in moire_results_list
+# for (i in seq_along(moire_results_list)) {
+#   # Summarize effective coi and naive coi
+#   eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
+#   naive_coi <- moire::summarize_coi(moire_results_list[[i]])
+#   
+#   # Merge the summaries by sample_id
+#   coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
+#   
+#   # Add the processed coi_results to the list
+#   processed_coi_results <- rbind(processed_coi_results, coi_results)
+# }
 
-# Load each RDS file into the list with the file name as the list name
-for (file in rds_files) {
-  print(file)
-  file_name <- tools::file_path_sans_ext(basename(file))
-  moire_results_list[[file_name]] <- readRDS(file)
-}
 
+mcmc_results <- readRDS("TEST_all_1329_samples_MOIRE-RESULTS.RDS") 
 
-# Initialize an empty list to store the processed coi_results
-processed_coi_results <- data.frame()
+eff_coi <- moire::summarize_effective_coi(mcmc_results)
+naive_coi <- moire::summarize_coi(mcmc_results)
 
-# Loop through each element in moire_results_list
-for (i in seq_along(moire_results_list)) {
-  # Summarize effective coi and naive coi
-  eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
-  naive_coi <- moire::summarize_coi(moire_results_list[[i]])
-  
-  # Merge the summaries by sample_id
-  coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
-  
-  # Add the processed coi_results to the list
-  processed_coi_results <- rbind(processed_coi_results, coi_results)
-}
-
+# Merge the summaries by sample_id
+coi_results <- merge(eff_coi, naive_coi, by = "sample_id")
 
 # label mono and poly infections. NOTE: "proportion of polyclonal infections (eMOI>1.1)" from Nanna's manuscript
-processed_coi_results$polyclonal_from_ecoi_med <- ifelse(processed_coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
+coi_results$polyclonal_from_ecoi_med <- ifelse(coi_results$post_effective_coi_med > 1.1, "polyclonal", "monoclonal")
 
-#merge with categorical variables, controls are removed automatically
-colnames(processed_coi_results)[1] <- "NIDA2"
-processed_coi_results <- merge(processed_coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
+#merge with categorical variables
+colnames(coi_results)[1] <- "NIDA2"
+coi_results <- merge(coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
 
 # % polyclonal infections on each province and region per year
-polyclonal_percentage_region <- processed_coi_results %>%
+polyclonal_percentage_region <- coi_results %>%
   group_by(region, year) %>%
   summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
@@ -348,7 +393,7 @@ a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percent
   theme_minimal()
 a
 
-polyclonal_percentage_province <- processed_coi_results %>%
+polyclonal_percentage_province <- coi_results %>%
   group_by(province, year) %>%
   summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
@@ -362,9 +407,9 @@ b <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_per
 b
 
 # post_effective_coi_med
-processed_coi_results$year <- factor(processed_coi_results$year)
+coi_results$year <- factor(coi_results$year)
 
-c <- ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
+c <- ggplot(coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
   geom_boxplot() +
   labs(x = "Region", y = "Post Effective COI Median") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
@@ -372,7 +417,7 @@ c <- ggplot(processed_coi_results, aes(x = region, y = post_effective_coi_med, f
   ylim(0, NA)
 c
 
-d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
+d <-ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
   geom_boxplot() +
   labs(x = "Province", y = "Post Effective COI Median") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
@@ -381,7 +426,7 @@ d <-ggplot(processed_coi_results, aes(x = province, y = post_effective_coi_med, 
 d
 
 # naive coi
-e <- ggplot(processed_coi_results, aes(x = region, y = naive_coi, fill = year)) +
+e <- ggplot(coi_results, aes(x = region, y = naive_coi, fill = year)) +
   geom_boxplot() +
   labs(x = "Region", y = "Naive COI") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
@@ -389,7 +434,7 @@ e <- ggplot(processed_coi_results, aes(x = region, y = naive_coi, fill = year)) 
   ylim(0, NA)
 e
 
-f <-ggplot(processed_coi_results, aes(x = province, y = naive_coi, fill = year)) +
+f <-ggplot(coi_results, aes(x = province, y = naive_coi, fill = year)) +
   geom_boxplot() +
   labs(x = "Province", y = "Naive COI") +
   scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
@@ -400,6 +445,8 @@ f
 #######################################################
 # 6.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 #######################################################
+
+combined_df_merged <- readRDS("combined_df_merged.RDS") 
 
 sample_size_provinces <- combined_df_merged %>%
   group_by(year, province) %>%
@@ -703,34 +750,34 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
 
 
-### MAKE THE PCA A FUNCTION ON WHICH YOU CAN CHOOSE INPUT: (PRESENCE/ABSENCE OR FREQS) AND THE VARIABLES TO TEST (JOINED OR SIMPLE)
-
-# Perform PCA on rearranged
-pca_result <- prcomp(rearranged_filtered, scale. = FALSE)
-pc_scores <- as.data.frame(pca_result$x)
-pca_data <- cbind(pc_scores, pca_labels)  # Make sure pca_labels is defined
-
-# Extract PCA results
-pcs <- as.data.frame(pca_result$x)  # principal components
-variance <- pca_result$sdev^2  # variance of each principal component
-prop_variance <- variance / sum(variance)  # proportion of variance explained by each component
-
-# Generate contrasting colors from RColorBrewer palette
-num_colors <- length(unique(factor(paste0(pca_data$region, "_", pca_data$year))))
-set.seed(690)
-Set1_colors <- brewer.pal(9, "Set1")
-Set2_colors <- brewer.pal(8, "Set2")
-mixed_colors <- c(Set1_colors, Set2_colors)
-random_colors <- sample(mixed_colors, num_colors)
-
-# Plot PCA with ggplot including sample labels
-ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(region, "_", year)), label = rownames(pca_data))) +
-  geom_point(size = 3, alpha = 0.8) +
-  labs(title = "PCA of Genetic Content",
-       x = paste0("PC1 (", round(prop_variance[1] * 100, 2), "%)"),
-       y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)")) +
-  scale_color_manual(values = random_colors) +
-  theme_minimal()
+# ### MAKE THE PCA A FUNCTION ON WHICH YOU CAN CHOOSE INPUT: (PRESENCE/ABSENCE OR FREQS) AND THE VARIABLES TO TEST (JOINED OR SIMPLE)
+# 
+# # Perform PCA on rearranged
+# pca_result <- prcomp(rearranged_filtered, scale. = FALSE)
+# pc_scores <- as.data.frame(pca_result$x)
+# pca_data <- cbind(pc_scores, pca_labels)  # Make sure pca_labels is defined
+# 
+# # Extract PCA results
+# pcs <- as.data.frame(pca_result$x)  # principal components
+# variance <- pca_result$sdev^2  # variance of each principal component
+# prop_variance <- variance / sum(variance)  # proportion of variance explained by each component
+# 
+# # Generate contrasting colors from RColorBrewer palette
+# num_colors <- length(unique(factor(paste0(pca_data$region, "_", pca_data$year))))
+# set.seed(690)
+# Set1_colors <- brewer.pal(9, "Set1")
+# Set2_colors <- brewer.pal(8, "Set2")
+# mixed_colors <- c(Set1_colors, Set2_colors)
+# random_colors <- sample(mixed_colors, num_colors)
+# 
+# # Plot PCA with ggplot including sample labels
+# ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(region, "_", year)), label = rownames(pca_data))) +
+#   geom_point(size = 3, alpha = 0.8) +
+#   labs(title = "PCA of Genetic Content",
+#        x = paste0("PC1 (", round(prop_variance[1] * 100, 2), "%)"),
+#        y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)")) +
+#   scale_color_manual(values = random_colors) +
+#   theme_minimal()
  
 #TSNE
 library(Rtsne)
@@ -766,6 +813,10 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape 
 #######################################################
 # 8.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
 #######################################################
+
+### TO DO:
+# 1.- check issue with min(coi) = 0 (something about having alleles with 0 all across samples maybe? would also explain the need to remove 0 columns on the tsne/pca)
+# 2.- make image good!
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
