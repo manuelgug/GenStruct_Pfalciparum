@@ -8,7 +8,7 @@ library(dplyr)
 library(vegan)
 library(reshape2)
 library(RColorBrewer)
-
+library(Rtsne)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -621,14 +621,14 @@ for (province in unique_provinces) {
 colors <- brewer.pal(9, "Paired")
 
 # Plot the curves for 2021
-plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Province)", xlim = c(0,85), ylim = c(0,2700))
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Province)", xlim = c(0,85), ylim = c(0,2000))
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 65, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,3000))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,2200))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
@@ -723,14 +723,14 @@ for (region in unique_provinces) {
 colors <- brewer.pal(3, "Paired")
 
 # Plot the curves for 2021
-plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Region)", xlim = c(0,150), ylim = c(0,3000))
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Region)", xlim = c(0,150), ylim = c(0,2000))
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 120, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,500), ylim = c(0,4000))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,500), ylim = c(0,3000))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
@@ -815,7 +815,6 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
 #   theme_minimal()
  
 #TSNE
-library(Rtsne)
 
 set.seed(420)
 tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
@@ -877,11 +876,17 @@ meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
 min(coi)
-coi[coi == 0] <- 1 #COPE, I DON'T KNOW WHY I'M GETTING COI OF ZERO SOMETIMES (probably some formatting issue with the input df... CHECK IN DEPTH. THIS ALLOWS ibDat FUNCTION TO RUN WITHOUT ERRORS, BUT I DON'T KNOW WHAT'S GOING ON
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
 str(afreq, list.len = 2)
+
+#order
+provinces <- unique(meta$province)
+nsite     <- table(meta$province)[provinces]
+ord       <- order(factor(meta$province, levels = provinces))
+dsmp <- dsmp[ord]
+coi  <- coi[ ord]
 
 #calculate ibd
 dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
@@ -889,15 +894,23 @@ dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
 
 #saveRDS(dres0_2021, "dres0_2021.RDS")
 
-par(mar = c(3, 3, 1, 1))
-alpha <- 0.05                          # significance level                    
-dmat <- dres0_2021[, , "estimate"]
-# create symmetric matrix
-dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]  
-# determine significant, reverse columns for upper triangle
-isig <- which(dres0_2021[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
-plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
-        col_id = c(1:10)[factor(meta$region)]) 
+layout(matrix(1:2, 1), width = c(7, 1))
+par(mar = c(1, 1, 2, 1))
+nsmp  <- length(dsmp)
+atsep <- cumsum(nsite)[-length(nsite)]
+isig  <- which(dres0_2021[, , "p_value"] <= alpha, arr.ind = TRUE)
+dmat  <- dres0_2021[, , "estimate"]
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
+
+plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
+
+abline(v = atsep, h = atsep, col = "gray45", lty = 5)
+atclin <- cumsum(nsite) - nsite/2
+mtext(provinces, side = 3, at = atclin, line = 0.2)
+mtext(provinces, side = 2, at = atclin, line = 0.2)
+
+par(mar = c(1, 0, 2, 3))
+plotColorbar()
 
 
 ## 2022 samples ##
@@ -907,14 +920,13 @@ dsmp <- formatDat(combined_df_merged_2022, svar = "NIDA2", lvar = "locus", avar 
 str(dsmp, list.len = 2)
 
 # format metadata
-meta <- unique(combined_df_merged_2021[c("NIDA2", "region", "province")])
+meta <- unique(combined_df_merged_2022[c("NIDA2", "region", "province")])
 meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 
 #estimate naive coi
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
 min(coi)
-coi[coi == 0] <- 1 #COPE, I DON'T KNOW WHY I'M GETTING COI OF ZERO SOMETIMES (probably some formatting issue with the input df... CHECK IN DEPTH. THIS ALLOWS ibDat FUNCTION TO RUN WITHOUT ERRORS, BUT I DON'T KNOW WHAT'S GOING ON
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
