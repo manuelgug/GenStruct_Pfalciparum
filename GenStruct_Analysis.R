@@ -848,14 +848,10 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape 
 # 8.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
 #######################################################
 
-### TO DO:
-# 1.- check issue with min(coi) = 0 (something about having alleles with 0 all across samples maybe? would also explain the need to remove 0 columns on the tsne/pca)
-# 2.- make image good!
+combined_df_merged <- readRDS("combined_df_merged.RDS")
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
-
-combined_df_merged <- readRDS("combined_df_merged.RDS")
 
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
@@ -892,7 +888,7 @@ coi  <- coi[ ord]
 dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                  alpha = 0.05, nr = 1e3)  
 
-#saveRDS(dres0_2021, "dres0_2021.RDS")
+# saveRDS(dres0_2021, "dres0_2021.RDS")
 
 pdf("dres0_2021_plot.pdf", width = 15, height = 15) 
 
@@ -948,7 +944,7 @@ coi  <- coi[ ord]
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                      alpha = 0.05, nr = 1e3)  
 
-saveRDS(dres0_2022, "dres0_2022.RDS")
+# saveRDS(dres0_2022, "dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
 
@@ -989,8 +985,8 @@ run_moire <- function(df, output_name) {
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
+  burnin <- 2.5e3
+  num_samples <- 2.5e3
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
@@ -1041,10 +1037,81 @@ for (i in seq_along(data_frames)) {
   }
 }
 
-
 #######################################################
 # 8.- He and Fws results
 #######################################################
+
+#import everything into lists
+rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./TEST_all_1329_samples_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+
+He_results_list <- list()
+
+# Load each RDS file into the list with the file name as the list name
+for (file in rds_files) {
+  print(file)
+  file_name <- tools::file_path_sans_ext(basename(file))
+  He_results_list[[file_name]] <- readRDS(file)
+}
+
+# Initialize an empty list to store the processed coi_results
+processed_He_results <- data.frame()
+
+# Loop through each element in He_results_list
+for (i in seq_along(He_results_list)) {
+  
+  # Summarize He
+  He_results <- moire::summarize_he(He_results_list[[i]])
+  He_results$population <- names(He_results_list[i])
+  
+  # Add the processed coi_results to the list
+  processed_He_results <- rbind(processed_He_results, He_results)
+}
+
+processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
+
+
+# # Melt the data frame to convert it from wide to long format
+# melted_He <- melt(processed_He_results, id.vars = c("population", "locus"), measure.vars = "post_stat_mean")
+# melted_He<-melted_He[,-3]
+# 
+# library(tidyr)
+# 
+# He_rearranged <- melted_He %>%
+#   pivot_wider(
+#     names_from = locus,
+#     values_from = value
+#   )
+# 
+# # format
+# He_rearranged <- as.data.frame(He_rearranged)
+# rownames(He_rearranged) <- He_rearranged$population
+# He_rearranged <- He_rearranged[, -1]
+# He_rearranged <- replace(He_rearranged, is.na(He_rearranged), 0)
+# 
+# # tsne of mean He
+# set.seed(420)
+# tsne_result_He <- Rtsne(as.matrix(He_rearranged), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = 5)
+# 
+# # Convert t-SNE results to data frame
+# tsne_data_He <- as.data.frame(tsne_result_He$Y)
+# 
+# # labels 
+# 
+# labels <- rownames(He_rearranged)
+# 
+# # Plot t-SNE of freqs
+# ggplot(tsne_data_He, aes(V1, V2, color = factor(labels))) +
+#   geom_point(size = 4, alpha = 0.7) +
+#   labs(title = "t-SNE of Genetic Content (allele frequency)",
+#        x = "t-SNE 1", y = "t-SNE 2") +
+#   theme_minimal()
+
+
+
+
+
+
 
 # calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
 combined_df_merged <- combined_df_merged %>%
