@@ -16,23 +16,23 @@ library(Rtsne)
 
 # a) Determine genetic diversity of Plasmodium falciparum in Mozambique
 # • Intra-host diversity
-#   ◦ Calculate MOI overall and means per province and region for each year (Naïve and eMOI, which incorporates intra-host relatedness between clones)
-#   ◦ Calculate % of polyclonal infections per province and region for each year
+#   ◦ Calculate MOI overall and means per province and region for each year (Naïve and eMOI, which incorporates intra-host relatedness between clones) ✔
+#   ◦ Calculate % of polyclonal infections per province and region for each year ✔
 #   ◦ Fixation index Fws??
 # • Population genetic diversity: 
-#   ◦ Calculate He per locus per province and region
+#   ◦ Calculate He per locus per province and region ✔
 #   ◦ Correlates with transmission intensity?
 # Refs: Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4 ; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22 
 
 # b) Determine population structure and connectivity between parasite populations in Mozambique
 # • PCA to determine population structure
 # • Genetic differentiation (Fst) between provinces and regions
-# • Proportion of related pairwise infections using IBD between provinces and regions
+# • Proportion of related pairwise infections using IBD between provinces and regions 
 # Refs: Arnau; Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22; Gerlovina et al, Genetics 2022
 
 # c) Determine clonal emergence vs spread from other regions for parasites carrying VOC (dhps581 and dhps436)
 # • Map parasites with VOC on PCA (color)
-# • Determine pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas. 
+# • Determine pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
 # Refs: daSilva et al, https://doi.org/10.1038/s42003-023-04997-7; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4
 
 # d) Kruskal–Wallis rank sum test will be used for the comparison of the distribution between populations, with Dunn’s test and Bonferroni correction for multiple testing in pairwise comparisons.
@@ -276,13 +276,13 @@ combined_df_merged <- combined_df_merged[!combined_df_merged$NIDA2 %in% removed_
 
 #sanity check
 if (sum(is.na(combined_df_merged)) == 0){
-  print("No NAs.")
+  print("No NAs ✔")
 }else{
   print("grab a coffee.")
 }
 
 if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
-  print("All nidas in combined_merged_df are also the metadata db. No weird samples.✅")
+  print("All nidas in combined_merged_df are also the metadata db. No weird samples ✔")
 }else{
   print("grab another coffee.")
 }
@@ -368,36 +368,6 @@ saveRDS(mcmc_results, "all_1329_samples_MOIRE-RESULTS.RDS")
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
-
-#import  moire results:
-# rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-
-# moire_results_list <- list()
-# 
-# # Load each RDS file into the list with the file name as the list name
-# for (file in rds_files) {
-#   print(file)
-#   file_name <- tools::file_path_sans_ext(basename(file))
-#   moire_results_list[[file_name]] <- readRDS(file)
-# }
-# 
-# 
-# # Initialize an empty list to store the processed coi_results
-# processed_coi_results <- data.frame()
-# 
-# # Loop through each element in moire_results_list
-# for (i in seq_along(moire_results_list)) {
-#   # Summarize effective coi and naive coi
-#   eff_coi <- moire::summarize_effective_coi(moire_results_list[[i]])
-#   naive_coi <- moire::summarize_coi(moire_results_list[[i]])
-#   
-#   # Merge the summaries by sample_id
-#   coi_results <- merge(eff_coi, naive_coi, by = "sample_id")   #[c("sample_id", "post_effective_coi_mean", "post_effective_coi_med", "naive_coi")]
-#   
-#   # Add the processed coi_results to the list
-#   processed_coi_results <- rbind(processed_coi_results, coi_results)
-# }
-
 
 mcmc_results <- readRDS("TEST_all_1329_samples_MOIRE-RESULTS.RDS") 
 
@@ -496,32 +466,6 @@ sample_size_regions <- combined_df_merged %>%
 sample_size_regions
 
 ################################### 
-# RAREFACTION CURVES
-
-# raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-#                                    year = combined_df_merged$year, 
-#                                    province = combined_df_merged$province,
-#                                    region = combined_df_merged$region,
-#                                    locus = combined_df_merged$locus,
-#                                    n.alleles = combined_df_merged$n.alleles,
-#                                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)))
-# 
-# raref_input <- raref_input %>% distinct()
-# 
-# #subsetting #INIT LOOP
-# sub <- raref_input[raref_input$year == 2022 & raref_input$province =="Maputo",] #iterate this 
-# 
-# # Cast the dataframe to wide format
-# raref_df <- dcast(sub, NIDA2 ~ locus, value.var = "n.alleles")
-# raref_df <- raref_df[, -1]
-# raref_df <- apply(raref_df, 2, function(x) as.numeric(as.character(x)))
-# 
-# 
-# # CALCULATE CURVE
-# accum_curve <-specaccum(raref_df, 'random', permutations = 1000, method = "rarefaction")
-# plot(accum_curve, xlab = "Samples")
-
-###########################################
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
 
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
@@ -783,36 +727,6 @@ rearranged_pres_abs <- rearranged %>%
 
 rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
-
-
-# ### MAKE THE PCA A FUNCTION ON WHICH YOU CAN CHOOSE INPUT: (PRESENCE/ABSENCE OR FREQS) AND THE VARIABLES TO TEST (JOINED OR SIMPLE)
-# 
-# # Perform PCA on rearranged
-# pca_result <- prcomp(rearranged_filtered, scale. = FALSE)
-# pc_scores <- as.data.frame(pca_result$x)
-# pca_data <- cbind(pc_scores, pca_labels)  # Make sure pca_labels is defined
-# 
-# # Extract PCA results
-# pcs <- as.data.frame(pca_result$x)  # principal components
-# variance <- pca_result$sdev^2  # variance of each principal component
-# prop_variance <- variance / sum(variance)  # proportion of variance explained by each component
-# 
-# # Generate contrasting colors from RColorBrewer palette
-# num_colors <- length(unique(factor(paste0(pca_data$region, "_", pca_data$year))))
-# set.seed(690)
-# Set1_colors <- brewer.pal(9, "Set1")
-# Set2_colors <- brewer.pal(8, "Set2")
-# mixed_colors <- c(Set1_colors, Set2_colors)
-# random_colors <- sample(mixed_colors, num_colors)
-# 
-# # Plot PCA with ggplot including sample labels
-# ggplot(pca_data, aes(PC1, PC2, color = factor(paste0(region, "_", year)), label = rownames(pca_data))) +
-#   geom_point(size = 3, alpha = 0.8) +
-#   labs(title = "PCA of Genetic Content",
-#        x = paste0("PC1 (", round(prop_variance[1] * 100, 2), "%)"),
-#        y = paste0("PC2 (", round(prop_variance[2] * 100, 2), "%)")) +
-#   scale_color_manual(values = random_colors) +
-#   theme_minimal()
  
 #TSNE
 
@@ -1041,6 +955,8 @@ for (i in seq_along(data_frames)) {
 # 8.- He and Fws results
 #######################################################
 
+# calculate heterozygosity of the population (He); pop = province, region
+
 #import everything into lists
 rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
 rds_files <- rds_files[!rds_files %in% "./TEST_all_1329_samples_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
@@ -1070,43 +986,20 @@ for (i in seq_along(He_results_list)) {
 
 processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
 
+library(stringr)
+processed_He_results <- processed_He_results %>%
+  mutate(geo = ifelse(str_detect(population, "North|South|Center"), "region", "province"),
+         year = substr(population, nchar(population) - 3, nchar(population)))
 
-# # Melt the data frame to convert it from wide to long format
-# melted_He <- melt(processed_He_results, id.vars = c("population", "locus"), measure.vars = "post_stat_mean")
-# melted_He<-melted_He[,-3]
-# 
-# library(tidyr)
-# 
-# He_rearranged <- melted_He %>%
-#   pivot_wider(
-#     names_from = locus,
-#     values_from = value
-#   )
-# 
-# # format
-# He_rearranged <- as.data.frame(He_rearranged)
-# rownames(He_rearranged) <- He_rearranged$population
-# He_rearranged <- He_rearranged[, -1]
-# He_rearranged <- replace(He_rearranged, is.na(He_rearranged), 0)
-# 
-# # tsne of mean He
-# set.seed(420)
-# tsne_result_He <- Rtsne(as.matrix(He_rearranged), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = 5)
-# 
-# # Convert t-SNE results to data frame
-# tsne_data_He <- as.data.frame(tsne_result_He$Y)
-# 
-# # labels 
-# 
-# labels <- rownames(He_rearranged)
-# 
-# # Plot t-SNE of freqs
-# ggplot(tsne_data_He, aes(V1, V2, color = factor(labels))) +
-#   geom_point(size = 4, alpha = 0.7) +
-#   labs(title = "t-SNE of Genetic Content (allele frequency)",
-#        x = "t-SNE 1", y = "t-SNE 2") +
-#   theme_minimal()
 
+# TO DO:
+# 0) LEER A DETALLE PAPER DE NANNA
+# 1) I already have pop He, what next?
+# 2) Fst
+
+
+# extract freqs? #### AQUÍ VOY!!!
+moire::summarize_allele_freqs(He_results_list[[i]])
 
 
 
@@ -1118,7 +1011,6 @@ combined_df_merged <- combined_df_merged %>%
   group_by(NIDA2, locus) %>%
   mutate(Hw = 1 - (n.alleles * (1/n.alleles)^2))
 
-# calculate heterozygosity of the population (He): pop = province, region
 
 # calculate fixation index (Fws)
 
