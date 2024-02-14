@@ -881,8 +881,8 @@ min(coi)
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
 str(afreq, list.len = 2)
 
-#order
-provinces <- unique(meta$province)
+#order provinces from north to south
+provinces <- c("Niassa", "Zambezia", "Nampula", "Manica", "Inhambane", "Maputo") #ordered from north to south
 nsite     <- table(meta$province)[provinces]
 ord       <- order(factor(meta$province, levels = provinces))
 dsmp <- dsmp[ord]
@@ -894,7 +894,9 @@ dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
 
 #saveRDS(dres0_2021, "dres0_2021.RDS")
 
-layout(matrix(1:2, 1), width = c(7, 1))
+pdf("dres0_2021_plot.pdf", width = 15, height = 15) 
+
+layout(matrix(1:2, 1), width = c(15, 1))
 par(mar = c(1, 1, 2, 1))
 nsmp  <- length(dsmp)
 atsep <- cumsum(nsite)[-length(nsite)]
@@ -912,9 +914,10 @@ mtext(provinces, side = 2, at = atclin, line = 0.2)
 par(mar = c(1, 0, 2, 3))
 plotColorbar()
 
+dev.off()
+
 
 ## 2022 samples ##
-
 #format data
 dsmp <- formatDat(combined_df_merged_2022, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
 str(dsmp, list.len = 2)
@@ -926,27 +929,49 @@ meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 #estimate naive coi
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
-min(coi)
+min(coi) #1939916.4 only has 1 Diversity amplicon with 1 allele, so it's valid to change coi for 1 I guess (I'd remove the sample, but for now I'll leave it)
+coi[coi ==0] <- 1
+min(coi) # good
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
 str(afreq, list.len = 2)
 
+#order provinces from north to wouth
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica", "Sofala", "Inhambane", "Maputo") #ordered from north to south
+nsite     <- table(meta$province)[provinces]
+ord       <- order(factor(meta$province, levels = provinces))
+dsmp <- dsmp[ord]
+coi  <- coi[ ord]
+
 #calculate ibd
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
-                alpha = 0.05, nr = 1e3)  
+                     alpha = 0.05, nr = 1e3)  
 
-#saveRDS(dres0_2022, "dres0_2022.RDS")
+saveRDS(dres0_2022, "dres0_2022.RDS")
 
-par(mar = c(3, 3, 1, 1))
-alpha <- 0.05                          # significance level                    
-dmat <- dres0_2022[, , "estimate"]
-# create symmetric matrix
-dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))]  
-# determine significant, reverse columns for upper triangle
-isig <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)[, 2:1] 
-plotRel(dmat, isig = isig, draw_diag = TRUE, lwd_diag = 0.5, idlab = TRUE, 
-        col_id = c(1:10)[factor(meta$province)]) 
+pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
+
+layout(matrix(1:2, 1), width = c(15, 1))
+par(mar = c(1, 1, 2, 1))
+nsmp  <- length(dsmp)
+atsep <- cumsum(nsite)[-length(nsite)]
+isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
+dmat  <- dres0_2022[, , "estimate"]
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
+
+plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
+
+abline(v = atsep, h = atsep, col = "gray45", lty = 5)
+atclin <- cumsum(nsite) - nsite/2
+mtext(provinces, side = 3, at = atclin, line = 0.2)
+mtext(provinces, side = 2, at = atclin, line = 0.2)
+
+par(mar = c(1, 0, 2, 3))
+plotColorbar()
+
+dev.off()
+
 
 #######################################################
 # 7.- calculate He for each population (per year per region/province)
