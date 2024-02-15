@@ -247,7 +247,7 @@ for (df in allele_data_list) {
 saveRDS(allele_data_list, "allele_data_list.RDS")
 
 #######################################################
-# 3.- GENOMIC + DB MERGING for He calculation and beyond
+# 3.- GENOMIC + DB MERGING, FILTERING ETC. (DATA PREP)
 #######################################################
 
 allele_data_list <- readRDS("allele_data_list.RDS")
@@ -304,9 +304,77 @@ more_removed_sample
 
 combined_df_merged <- combined_df_merged[combined_df_merged$Category == "Diversity",] 
 
-SS <- length(unique(combined_df_merged$NIDA2))
 
+## FURTHER FILTERING
+
+# 1) MAF filering (< 0.01)
+combined_df_merged <- combined_df_merged[combined_df_merged$norm.reads.locus  > 0.01, ]
+
+# 2) check for coverage (>50 loci with >threshold reads)
+# Define thresholds for read depth
+thresholds <- c(25, 50, 100, 200)
+count_list <- list()
+
+# Loop over each threshold
+for (threshold in thresholds) {
+  # Calculate unique loci counts for the current threshold
+  count <- combined_df_merged %>%
+    group_by(NIDA2, locus) %>%
+    summarize(total_reads = sum(reads)) %>%
+    group_by(NIDA2) %>%
+    filter(total_reads > threshold) %>%
+    summarize(!!paste("unique_loci_", threshold, sep = "") := n_distinct(locus))
+
+  count_list[[paste("count_", threshold, sep = "")]] <- count
+}
+
+result_df <- Reduce(function(x, y) left_join(x, y, by = "NIDA2"), count_list)
+
+#count cells above 50 for each column with the "unique" substring: here, i'm calculating the sample size for each reads count threshold using 50 loci as cutoff: samples with <50 read count per loci below the threshold should be removed
+count_above_50 <- function(x) sum(x >= 50, na.rm = TRUE)
+unique_columns <- grep("unique", colnames(result_df), value = TRUE)
+
+count_results <- result_df %>%
+  summarise_at(vars(unique_columns), count_above_50)
+
+count_results
+
+# decided going with a threshold of >= 50 read depth, 100 is to astringnet for miseq: samples with a coverage of <50 diversity loci with a read depth <50 should be removed.
+samples_to_keep <- result_df[result_df$unique_loci_50 >= 50, ]$NIDA2
+
+combined_df_merged <- combined_df_merged[combined_df_merged$NIDA2 %in% samples_to_keep, ]
+
+
+# 3) remove bad diversity loci: those that are not in at least 100 samples with a read depth of 100. 
+# Group by NIDA2 and locus, then summarize the total reads
+locus_read_depth <- combined_df_merged %>%
+  group_by(NIDA2, locus) %>%
+  summarize(read_depth = sum(reads))
+
+# Count the number of samples with read depth greater than 100 for each locus
+locus_counts <- locus_read_depth %>%
+  group_by(locus) %>%
+  summarize(samples_above_100 = sum(read_depth > 100))
+
+loci_to_keep <- locus_counts$locus
+
+combined_df_merged <- combined_df_merged[combined_df_merged$locus %in% loci_to_keep, ]
+
+
+# JUST IN CASE... recalculate n.alleles for each locus of each sample
+combined_df_merged <- combined_df_merged %>%
+    group_by(NIDA2, locus) %>%
+    mutate(n.alleles = n_distinct(pseudo_cigar))
+
+combined_df_merged <- as.data.frame(combined_df_merged)
+
+
+# FILTERING RESULTS
+SS <- length(unique(combined_df_merged$NIDA2))
 cat("Final sample size is", as.character(SS))
+
+LC <- length(unique(combined_df_merged$locus))
+cat("Final Diversity loci count is", as.character(LC))
 
 #save allele_data_list
 saveRDS(combined_df_merged, "combined_df_merged.RDS")
@@ -318,33 +386,6 @@ saveRDS(combined_df_merged, "combined_df_merged.RDS")
 #######################################################
 # 4.- calculate MOI and eMOI for each run
 #######################################################
-# calculating from each run even though not all samples are gonna be used for the analysis. more info == better moi calculation so np
-
-# allele_data_list <- readRDS("allele_data_list.RDS") 
-# 
-# # Iterate over each element in allele_data_list
-# for (i in seq_along(allele_data_list)) {
-#   run <- names(allele_data_list)[i]
-#   df <- allele_data_list[[i]]
-#   print(run)
-#   
-#   # set MOIRE parameters
-#   dat_filter <- moire::load_long_form_data(df)
-#   burnin <- 1e4
-#   num_samples <- 1e4
-#   pt_chains <- seq(1, .5, length.out = 20)
-#   
-#   # run moire
-#   mcmc_results <- moire::run_mcmc(
-#     dat_filter, is_missing = dat_filter$is_missing,
-#     verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-#     pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-#     thin = 10
-#   )
-#   
-#   # checkpoint
-#   saveRDS(mcmc_results, paste0(run, "_MOIRE-RESULTS.RDS"))
-# }
 
 combined_df_merged <- readRDS("combined_df_merged.RDS") 
 
@@ -352,8 +393,8 @@ colnames(combined_df_merged)[1]<- c("sample_id")
 
 # set MOIRE parameters
 dat_filter <- moire::load_long_form_data(combined_df_merged)
-burnin <- 2.5e3
-num_samples <- 2.5e3
+burnin <- 1e4
+num_samples <- 1e4
 pt_chains <- seq(1, .5, length.out = 20)
 
 # run moire
@@ -363,13 +404,13 @@ mcmc_results <- moire::run_mcmc(
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
   thin = 10)
 
-saveRDS(mcmc_results, "all_1329_samples_MOIRE-RESULTS.RDS")
+saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS.RDS")
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("TEST_all_1329_samples_MOIRE-RESULTS.RDS") 
+mcmc_results <- readRDS("all__samples_no_further_filtering_MOIRE-RESULTS.RDS") # change name to final file, THIS IS TEST!!
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
