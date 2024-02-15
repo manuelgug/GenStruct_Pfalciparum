@@ -1075,7 +1075,7 @@ heterozygosity_data$fws_province <- heterozygosity_data$Hw/heterozygosity_data$H
 heterozygosity_data$fws_region <- heterozygosity_data$Hw/heterozygosity_data$He_region
 
 # Columns to keep
-columns_to_keep <- c("NIDA2", "locus", "year", "province", "region", "run_id",
+columns_to_keep <- c("NIDA2", "locus", "year", "province", "region", "n.alleles",
                      "Hw", "He_province", "He_region", "fws_province", "fws_region")
 # Filter columns
 heterozygosity_data_filtered <- heterozygosity_data %>%
@@ -1089,8 +1089,7 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
     (length(unique(heterozygosity_data_filtered$locus)) == length(unique(combined_df_merged$locus))) & 
     (length(unique(heterozygosity_data_filtered$year)) == length(unique(combined_df_merged$year))) & 
     (length(unique(heterozygosity_data_filtered$province)) == length(unique(combined_df_merged$province))) & 
-    (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region))) & 
-    (length(unique(heterozygosity_data_filtered$run_id)) == length(unique(combined_df_merged$run_id)))) {
+    (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region)))) {
   print("All looks good.")
 }
 
