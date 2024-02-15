@@ -762,7 +762,7 @@ rearranged <- rearranged %>%
 zero_cols <- sapply(rearranged, function(x) all(x == 0))
 rearranged_filtered <- rearranged[, !zero_cols]
 
- # Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
+# Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
 rearranged_pres_abs <- rearranged %>%
     mutate_all(~ ifelse(. > 0, 1, .))
 
@@ -770,7 +770,6 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
  
 #TSNE
-
 set.seed(420)
 tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
 set.seed(420)
@@ -848,6 +847,7 @@ dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
 pdf("dres0_2021_plot.pdf", width = 15, height = 15) 
 
 layout(matrix(1:2, 1), width = c(15, 1))
+alpha <- 0.05                        
 par(mar = c(1, 1, 2, 1))
 nsmp  <- length(dsmp)
 atsep <- cumsum(nsite)[-length(nsite)]
@@ -880,9 +880,7 @@ meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
 #estimate naive coi
 lrank <- 2
 coi   <- getCOI(dsmp, lrank = lrank)
-min(coi) #1939916.4 only has 1 Diversity amplicon with 1 allele, so it's valid to change coi for 1 I guess (I'd remove the sample, but for now I'll leave it)
-coi[coi ==0] <- 1
-min(coi) # good
+min(coi)
 
 #estimate allele freqs
 afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
@@ -905,6 +903,7 @@ pdf("dres0_2022_plot.pdf", width = 15, height = 15)
 
 layout(matrix(1:2, 1), width = c(15, 1))
 par(mar = c(1, 1, 2, 1))
+alpha <- 0.05         
 nsmp  <- length(dsmp)
 atsep <- cumsum(nsite)[-length(nsite)]
 isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
@@ -940,8 +939,8 @@ run_moire <- function(df, output_name) {
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 2.5e3
-  num_samples <- 2.5e3
+  burnin <- 1e4
+  num_samples <- 1e4
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
@@ -996,11 +995,12 @@ for (i in seq_along(data_frames)) {
 # 8.- He and Fws results
 #######################################################
 
-# calculate heterozygosity of the population (He); pop = province, region
+combined_df_merged <- readRDS("combined_df_merged.RDS")
 
+# 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
 rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "./TEST_all_1329_samples_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
 
 He_results_list <- list()
 
@@ -1011,7 +1011,6 @@ for (file in rds_files) {
   He_results_list[[file_name]] <- readRDS(file)
 }
 
-# Initialize an empty list to store the processed coi_results
 processed_He_results <- data.frame()
 
 # Loop through each element in He_results_list
@@ -1025,6 +1024,7 @@ for (i in seq_along(He_results_list)) {
   processed_He_results <- rbind(processed_He_results, He_results)
 }
 
+#formatting categories
 processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
 
 library(stringr)
@@ -1032,27 +1032,68 @@ processed_He_results <- processed_He_results %>%
   mutate(geo = ifelse(str_detect(population, "North|South|Center"), "region", "province"),
          year = substr(population, nchar(population) - 3, nchar(population)))
 
-
-# TO DO:
-# 0) LEER A DETALLE PAPER DE NANNA
-# 1) I already have pop He, what next?
-# 2) Fst
+processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
+processed_He_results$year <- as.numeric(processed_He_results$year)
 
 
-# extract freqs? #### AQUÍ VOY!!!
-moire::summarize_allele_freqs(He_results_list[[i]])
-
-
-
-
-
-
-# calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
-combined_df_merged <- combined_df_merged %>%
+# 2) calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
+heterozygosity_data <- combined_df_merged %>%
   group_by(NIDA2, locus) %>%
   mutate(Hw = 1 - (n.alleles * (1/n.alleles)^2))
 
 
-# calculate fixation index (Fws)
+# 3) calculate 1-Fws: 1 - Fws = Hw/He
+#add processed_He_results$post_stat_mean co heterozygosity_data$He when processed_He_results$population, processed_He_results$year and processed_He_results$lous match heterozygosity_data$province, heterozygosity_data$year and heterozygosity_data$locus, respectively
+
+#merge He from provinces
+merged_data <- heterozygosity_data %>%
+  left_join(processed_He_results, by = c("locus" = "locus", "year" = "year")) %>%
+  filter(population == province) %>%
+  mutate(He_province = ifelse(is.na(post_stat_mean), NA, post_stat_mean)) %>%
+  select(NIDA2, locus, year, He_province)
+
+heterozygosity_data <- heterozygosity_data %>%
+  left_join(merged_data, by = c("NIDA2", "locus", "year"))
+
+heterozygosity_data <- distinct(heterozygosity_data)
+heterozygosity_data
+
+#merge He from regions
+merged_data <- heterozygosity_data %>%
+  left_join(processed_He_results, by = c("locus" = "locus", "year" = "year")) %>%
+  filter(population == region) %>%
+  mutate(He_region = ifelse(is.na(post_stat_mean), NA, post_stat_mean)) %>%
+  select(NIDA2, locus, year, He_region)
+
+heterozygosity_data <- heterozygosity_data %>%
+  left_join(merged_data, by = c("NIDA2", "locus", "year"))
+
+heterozygosity_data <- distinct(heterozygosity_data)
+
+#calculate 1-Fws for province and region as populations
+heterozygosity_data$fws_province <- heterozygosity_data$Hw/heterozygosity_data$He_province
+heterozygosity_data$fws_region <- heterozygosity_data$Hw/heterozygosity_data$He_region
+
+# Columns to keep
+columns_to_keep <- c("NIDA2", "locus", "year", "province", "region", "run_id",
+                     "Hw", "He_province", "He_region", "fws_province", "fws_region")
+# Filter columns
+heterozygosity_data_filtered <- heterozygosity_data %>%
+  select(all_of(columns_to_keep))
+
+# Keep unique rows
+heterozygosity_data_filtered <- distinct(heterozygosity_data_filtered)
+
+#sanity check
+if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combined_df_merged$NIDA2))) & 
+    (length(unique(heterozygosity_data_filtered$locus)) == length(unique(combined_df_merged$locus))) & 
+    (length(unique(heterozygosity_data_filtered$year)) == length(unique(combined_df_merged$year))) & 
+    (length(unique(heterozygosity_data_filtered$province)) == length(unique(combined_df_merged$province))) & 
+    (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region))) & 
+    (length(unique(heterozygosity_data_filtered$run_id)) == length(unique(combined_df_merged$run_id)))) {
+  print("All looks good.")
+}
+
+
 
 # linear regression and correlation coeff of He vs eMOI
