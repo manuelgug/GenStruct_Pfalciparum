@@ -18,7 +18,7 @@ library(Rtsne)
 # • Intra-host diversity
 #   ◦ Calculate MOI overall and means per province and region for each year (Naïve and eMOI, which incorporates intra-host relatedness between clones) ✔
 #   ◦ Calculate % of polyclonal infections per province and region for each year ✔
-#   ◦ Fixation index Fws??
+#   ◦ Fixation index Fws?? ✔
 # • Population genetic diversity: 
 #   ◦ Calculate He per locus per province and region ✔
 #   ◦ Correlates with transmission intensity?
@@ -26,7 +26,7 @@ library(Rtsne)
 
 # b) Determine population structure and connectivity between parasite populations in Mozambique
 # • PCA to determine population structure
-# • Genetic differentiation (Fst) between provinces and regions
+# • Genetic differentiation (Fst) between provinces and regions 
 # • Proportion of related pairwise infections using IBD between provinces and regions 
 # Refs: Arnau; Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22; Gerlovina et al, Genetics 2022
 
@@ -287,11 +287,6 @@ if( sum(!(combined_df_merged$NIDA2 %in% db$NIDA2)) == 0){
   print("grab another coffee.")
 }
 
-# if (length(unique(db$NIDA2)) == length(unique(combined_df_merged$NIDA2))){
-#   print("same amount of samples in metadata db and combined_merged_df")
-# }else{
-#   print("cocaine maybe?")
-# }
 
 #KEEP ONLY DIVERTSITY LOCI!
 # are there samples with no Diversity loci sequenced?
@@ -793,13 +788,9 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape 
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
 
-#######################################################
-# 7.- Fst: Genetic differentiation (Fst) between provinces and regions
-#######################################################
-
 
 #######################################################
-# 8.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
+# 7.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
 #######################################################
 
 combined_df_merged <- readRDS("combined_df_merged.RDS")
@@ -922,9 +913,14 @@ plotColorbar()
 
 dev.off()
 
+#######################################################
+# 8.- Fst: Genetic differentiation (Fst) between provinces and regions
+#######################################################
+
+
 
 #######################################################
-# 7.- calculate He for each population (per year per region/province)
+# 9.- calculate He for each population (per year per region/province)
 #######################################################
 
 #subset 2021 data
@@ -992,7 +988,7 @@ for (i in seq_along(data_frames)) {
 }
 
 #######################################################
-# 8.- He and Fws results
+# 10.- He and Fws results
 #######################################################
 
 combined_df_merged <- readRDS("combined_df_merged.RDS")
@@ -1070,7 +1066,7 @@ heterozygosity_data <- heterozygosity_data %>%
 
 heterozygosity_data <- distinct(heterozygosity_data)
 
-#calculate 1-Fws for province and region as populations
+#calculate 1-Fws for province and region as populations, for each year
 heterozygosity_data$fws_province <- heterozygosity_data$Hw/heterozygosity_data$He_province
 heterozygosity_data$fws_region <- heterozygosity_data$Hw/heterozygosity_data$He_region
 
@@ -1092,6 +1088,21 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
     (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region)))) {
   print("All looks good.")
 }
+
+
+#visuals
+hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022,]$He_province, col = "cyan3" )
+hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021,]$He_province, add =T, col ="orange" )
+
+hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022,]$He_region, col = "cyan3" )
+hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021,]$He_region, add =T, col ="orange" )
+
+
+## TO DO
+#1) STATISTICS, check nanna's paper
+#2) what to do when pop He is super low and Hw is 0.5 or above... 1-fws ends up HUGE
+#3) Fst
+
 
 
 
