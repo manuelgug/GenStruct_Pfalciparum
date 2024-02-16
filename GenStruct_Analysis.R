@@ -1019,25 +1019,26 @@ combined_df_merged <- readRDS("combined_df_merged.RDS")
 rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
 rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
 
-He_results_list <- list()
 
 # Load each RDS file into the list with the file name as the list name
+He_results_list <- list()
+
 for (file in rds_files) {
   print(file)
   file_name <- tools::file_path_sans_ext(basename(file))
   He_results_list[[file_name]] <- readRDS(file)
 }
 
+# Loop through each element in He_results_list
 processed_He_results <- data.frame()
 
-# Loop through each element in He_results_list
 for (i in seq_along(He_results_list)) {
   
   # Summarize He
   He_results <- moire::summarize_he(He_results_list[[i]])
   He_results$population <- names(He_results_list[i])
   
-  # Add the processed coi_results to the list
+  # Add the processed He results to the list
   processed_He_results <- rbind(processed_He_results, He_results)
 }
 
@@ -1059,7 +1060,7 @@ heterozygosity_data <- combined_df_merged %>%
   mutate(Hw = 1 - (n.alleles * (1/n.alleles)^2))
 
 
-# 3) calculate 1-Fws: 1 - Fws = Hw/He
+# 3) calculate 1-Fws: 1-Fws = Hw/He
 #merge He from provinces
 merged_data <- heterozygosity_data %>%
   left_join(processed_He_results, by = c("locus" = "locus", "year" = "year")) %>%
@@ -1111,8 +1112,14 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
   print("All looks good.")
 }
 
+#WHY IS IT NOT BETWEEN 0 AND 1??? (should it be?)
+mean_Fws_per_individual<- heterozygosity_data_filtered %>%
+  group_by(NIDA2, year, province, region) %>%
+  summarize(mean_indiv_fws_province = mean(fws_province),
+            mean_indiv_fws_region = mean(fws_region))
 
-#visuals
+
+# STATISTICAL ANALYSES
 # Filter data by province and region
 combined_data_province <- rbind(data.frame(Year = "2021", He_province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2021, ]$post_stat_mean, 
                                            province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2021, ]$population),
@@ -1123,28 +1130,6 @@ combined_data_region <- rbind(data.frame(Year = "2021", He_region = processed_He
                                          region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2021, ]$population),
                               data.frame(Year = "2022", He_region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2022, ]$post_stat_mean, 
                                          region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2022, ]$population))
-
-#provinces
-ggplot(combined_data_province, aes(x = He_province, fill = Year)) +
-  geom_histogram(alpha = 0.7, bins = 30) +
-  labs(title = "Province Heterozygosity by Year",
-       x = "He Province",
-       y = "Frequency") +
-  scale_fill_manual(name = "Year", 
-                    values = c("2022" = "cyan3", "2021" = "orange")) +
-  facet_wrap(~ province) +
-  theme_minimal()
-
-#regions
-ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
-  geom_histogram(alpha = 0.7, bins = 30) +
-  labs(title = "Region Heterozygosity by Year",
-       x = "He Region",
-       y = "Frequency") +
-  scale_fill_manual(name = "Year", 
-                    values = c("2022" = "cyan3", "2021" = "orange")) +
-  facet_wrap(~ region) +
-  theme_minimal()
 
 
 # CHECK FOR NORMALITY IN THE He DATA
@@ -1187,20 +1172,76 @@ shapiro_test_results_region <- combined_data_region %>%
 shapiro_test_results_region
 
 
-## MOST He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox)
-pairwise_province_He_2021 <- pairwise.wilcox.test(combined_data_province[combined_data_province$Year == 2021, ]$He_province, combined_data_province[combined_data_province$Year == 2021, ]$province, p.adjust.method = "bonferroni")
-pairwise_province_He_2022 <- pairwise.wilcox.test(combined_data_province[combined_data_province$Year == 2022, ]$He_province, combined_data_province[combined_data_province$Year == 2022, ]$province, p.adjust.method = "bonferroni")
+## MOST He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox): 
+# 1) SPATIAL COMPARISONS: same year, across populations 
+pairwise_province_He_2021 <- pairwise.wilcox.test(combined_data_province[combined_data_province$Year == 2021, ]$He_province, 
+                                                  combined_data_province[combined_data_province$Year == 2021, ]$province, p.adjust.method = "bonferroni")
 
-pairwise_region_He_2021 <- pairwise.wilcox.test(combined_data_region[combined_data_region$Year == 2021, ]$He_region, combined_data_region[combined_data_region$Year == 2021, ]$region, p.adjust.method = "bonferroni")
-pairwise_region_He_2022 <- pairwise.wilcox.test(combined_data_region[combined_data_region$Year == 2022, ]$He_region, combined_data_region[combined_data_region$Year == 2022, ]$region, p.adjust.method = "bonferroni")
+p.val_province_He_2021 <- melt(pairwise_province_He_2021[[3]])
+
+signif_p.val_province_He_2021 <- p.val_province_He_2021[p.val_province_He_2021$value <0.05 & !is.na(p.val_province_He_2021$value),]
+
+pairwise_province_He_2022 <- pairwise.wilcox.test(combined_data_province[combined_data_province$Year == 2022, ]$He_province, 
+                                                  combined_data_province[combined_data_province$Year == 2022, ]$province, p.adjust.method = "bonferroni")
+
+p.val_province_He_2022 <- melt(pairwise_province_He_2022[[3]])
+signif_p.val_province_He_2022 <- p.val_province_He_2022[p.val_province_He_2022$value <0.05 & !is.na(p.val_province_He_2022$value),]
+
+pairwise_region_He_2021 <- pairwise.wilcox.test(combined_data_region[combined_data_region$Year == 2021, ]$He_region, 
+                                                combined_data_region[combined_data_region$Year == 2021, ]$region, p.adjust.method = "bonferroni")
+
+p.val_region_He_2021 <- melt(pairwise_region_He_2021[[3]])
+signif_p.val_region_He_2021 <- p.val_region_He_2021[p.val_region_He_2021$value <0.05 & !is.na(p.val_region_He_2021$value),]
+
+pairwise_region_He_2022 <- pairwise.wilcox.test(combined_data_region[combined_data_region$Year == 2022, ]$He_region, 
+                                                combined_data_region[combined_data_region$Year == 2022, ]$region, p.adjust.method = "bonferroni")
+
+p.val_region_He_2022 <- melt(pairwise_region_He_2022[[3]])
+signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
+
+# 2) TEMPORAL COMPARISONS: same population, across years
+
+
+
+# Changes in He distributions and means by year
+#provinces
+mean_data <- combined_data_province %>%
+  group_by(Year, province) %>%
+  summarize(mean_He = mean(He_province, na.rm = TRUE))
+
+ggplot(combined_data_province, aes(x = He_province, fill = Year)) +
+  geom_histogram(alpha = 0.7, bins = 30) +
+  geom_vline(data = mean_data, aes(xintercept = mean_He, color = Year), linetype = "solid") +
+  labs(title = "Province Heterozygosity by Year",
+       x = "He",
+       y = "Frequency") +
+  scale_fill_manual(name = "Year", 
+                    values = c("2022" = "cyan3", "2021" = "orange")) +
+  facet_wrap(~ province) +
+  theme_minimal()
+
+#regions
+mean_data <- combined_data_region %>%
+  group_by(Year, region) %>%
+  summarize(mean_He = mean(He_region, na.rm = TRUE))
+
+ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
+  geom_histogram(alpha = 0.7, bins = 30) +
+  geom_vline(data = mean_data, aes(xintercept = mean_He, color = Year), linetype = "solid") +
+  labs(title = "Region Heterozygosity by Year",
+       x = "He",
+       y = "Frequency") +
+  scale_fill_manual(name = "Year", 
+                    values = c("2022" = "cyan3", "2021" = "orange")) +
+  facet_wrap(~ region) +
+  theme_minimal()
 
 
 ## TO DO
-#1) STATISTICS, check nanna's paper
+#1) STATISTICS, check nanna's paper (ongoing)
 #2) what to do when pop He is super low and Hw is 0.5 or above... 1-fws ends up HUGE
 #3) Fst
 
 
-pval$Centre_2021
 
 # linear regression and correlation coeff of He vs eMOI
