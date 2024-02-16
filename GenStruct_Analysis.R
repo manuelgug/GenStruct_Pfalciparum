@@ -1046,7 +1046,7 @@ processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_resul
 
 library(stringr)
 processed_He_results <- processed_He_results %>%
-  mutate(geo = ifelse(str_detect(population, "North|South|Center"), "region", "province"),
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
          year = substr(population, nchar(population) - 3, nchar(population)))
 
 processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
@@ -1115,15 +1115,22 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
 
 
 #visuals
-# Filter data by year
-data_2022 <- heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022, ]
-data_2021 <- heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021, ]
+# Filter data by province and region
+combined_data_province <- rbind(data.frame(Year = "2021", He_province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2021, ]$post_stat_mean, 
+                                           province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2021, ]$population),
+                                data.frame(Year = "2022", He_province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2022, ]$post_stat_mean, 
+                                           province = processed_He_results[processed_He_results$geo == "province" & processed_He_results$year == 2022, ]$population))
 
-# Create ggplot plot with legends
+combined_data_region <- rbind(data.frame(Year = "2021", He_region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2021, ]$post_stat_mean, 
+                                         region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2021, ]$population),
+                              data.frame(Year = "2022", He_region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2022, ]$post_stat_mean, 
+                                         region = processed_He_results[processed_He_results$geo == "region" & processed_He_results$year == 2022, ]$population))
+
+#plots
 ggplot() +
-  geom_histogram(data = data_2022, aes(x = He_province, fill = "2022"), alpha = 0.7, bins = 50) +
-  geom_histogram(data = data_2021, aes(x = He_province, fill = "2021"), alpha = 0.7, bins = 50) +
-  labs(title = "Province Heterozygosity by year",
+  geom_histogram(data = combined_data_province[combined_data_province$Year == "2022",], aes(x = He_province, fill = "2022"), alpha = 0.7, bins = 30) +
+  geom_histogram(data = combined_data_province[combined_data_province$Year == "2021",], aes(x = He_province, fill = "2021"), alpha = 0.7, bins = 30) +
+  labs(title = "Province Heterozygosity by Year",
        x = "He Province",
        y = "Frequency") +
   scale_fill_manual(name = "Year", 
@@ -1131,14 +1138,66 @@ ggplot() +
   theme_minimal()
 
 ggplot() +
-  geom_histogram(data = data_2022, aes(x = He_region, fill = "2022"), alpha = 0.7, bins = 50) +
-  geom_histogram(data = data_2021, aes(x = He_region, fill = "2021"), alpha = 0.7, bins = 50) +
-  labs(title = "Region Heterozygosity by year",
+  geom_histogram(data = combined_data_region[combined_data_region$Year == "2022",], aes(x = He_region, fill = "2022"), alpha = 0.7, bins = 30) +
+  geom_histogram(data = combined_data_region[combined_data_region$Year == "2021",], aes(x = He_region, fill = "2021"), alpha = 0.7, bins = 30) +
+  labs(title = "Region Heterozygosity by Year",
        x = "He Region",
        y = "Frequency") +
   scale_fill_manual(name = "Year", 
                     values = c("2022" = "cyan3", "2021" = "orange")) +
   theme_minimal()
+
+
+# CHECK FOR NORMALITY IN THE He DATA
+
+# PROVINCE
+# Create Q-Q plots
+qqplots_prov <- combined_data_province %>%
+  ggplot(aes(sample = He_province)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_wrap(~Year, scales = "free") +
+  labs(title = "Q-Q Plot of He_province by Year")
+
+qqplots_prov
+
+# Perform Shapiro-Wilk test for each year
+shapiro_test_results_province <- combined_data_province %>%
+  group_by(Year) %>%
+  summarize(
+    p_value = shapiro.test(He_province)$p.value
+  )
+
+shapiro_test_results_province
+
+#REGION
+# Create Q-Q plots
+qqplots_prov <- combined_data_region %>%
+  ggplot(aes(sample = He_region)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_wrap(~Year, scales = "free") +
+  labs(title = "Q-Q Plot of He_region by Year")
+
+qqplots_prov
+
+# Perform Shapiro-Wilk test for each year
+shapiro_test_results_region <- combined_data_region %>%
+  group_by(Year) %>%
+  summarize(
+    p_value = shapiro.test(He_region)$p.value
+  )
+
+shapiro_test_results_region
+
+
+## He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS
+kruskal_test_result_province <- kruskal.test(He_province ~ Year, data = combined_data_province)
+kruskal_test_result_province
+
+kruskal_test_result_region <- kruskal.test(He_region ~ Year, data = combined_data_region)
+kruskal_test_result_region
+
 
 ## TO DO
 #1) STATISTICS, check nanna's paper
