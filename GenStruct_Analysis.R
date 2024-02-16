@@ -426,6 +426,27 @@ polyclonal_percentage_region <- coi_results %>%
   summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
 
+
+# Create histogram plot with facets for each year
+ggplot(coi_results, aes(x = naive_coi, fill = province)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
+  facet_grid(year ~ province, scales = "free") +
+  labs(title = "Histogram of Naive COI Med Province",
+       x = "Post Effective COI Med",
+       y = "Frequency",
+       fill = "Province") +
+  theme_minimal()
+
+ggplot(coi_results, aes(x = naive_coi, fill = region)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
+  facet_grid(year ~ region, scales = "free") +
+  labs(title = "Histogram of Naive COI by Province",
+       x = "Post Effective COI Med",
+       y = "Frequency",
+       fill = "Province") +
+  theme_minimal()
+
+
 a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "Region", y = "% Polyclonal Infections") +
@@ -1080,6 +1101,9 @@ heterozygosity_data_filtered <- heterozygosity_data %>%
 # Keep unique rows
 heterozygosity_data_filtered <- distinct(heterozygosity_data_filtered)
 
+# convert NA to 0 (monoallelic loci that doesn't have heterozygosity)
+heterozygosity_data_filtered[is.na(heterozygosity_data_filtered)] <- 0
+
 #sanity check
 if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combined_df_merged$NIDA2))) & 
     (length(unique(heterozygosity_data_filtered$locus)) == length(unique(combined_df_merged$locus))) & 
@@ -1091,12 +1115,30 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
 
 
 #visuals
-hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022,]$He_province, col = "cyan3" )
-hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021,]$He_province, add =T, col ="orange" )
+# Filter data by year
+data_2022 <- heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022, ]
+data_2021 <- heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021, ]
 
-hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2022,]$He_region, col = "cyan3" )
-hist(heterozygosity_data_filtered[heterozygosity_data_filtered$year == 2021,]$He_region, add =T, col ="orange" )
+# Create ggplot plot with legends
+ggplot() +
+  geom_histogram(data = data_2022, aes(x = He_province, fill = "2022"), alpha = 0.7, bins = 50) +
+  geom_histogram(data = data_2021, aes(x = He_province, fill = "2021"), alpha = 0.7, bins = 50) +
+  labs(title = "Province Heterozygosity by year",
+       x = "He Province",
+       y = "Frequency") +
+  scale_fill_manual(name = "Year", 
+                    values = c("2022" = "cyan3", "2021" = "orange")) +
+  theme_minimal()
 
+ggplot() +
+  geom_histogram(data = data_2022, aes(x = He_region, fill = "2022"), alpha = 0.7, bins = 50) +
+  geom_histogram(data = data_2021, aes(x = He_region, fill = "2021"), alpha = 0.7, bins = 50) +
+  labs(title = "Region Heterozygosity by year",
+       x = "He Region",
+       y = "Frequency") +
+  scale_fill_manual(name = "Year", 
+                    values = c("2022" = "cyan3", "2021" = "orange")) +
+  theme_minimal()
 
 ## TO DO
 #1) STATISTICS, check nanna's paper
