@@ -745,6 +745,18 @@ legend(x = 400, y = 950, legend = names(accum_curves_2022), fill = colors, x.int
 ###### PCA ########
 ########################
 
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                                   year = combined_df_merged$year, 
+                                   province = combined_df_merged$province,
+                                   region = combined_df_merged$region,
+                                   locus = combined_df_merged$locus,
+                                   n.alleles = combined_df_merged$n.alleles,
+                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
+                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
+                                   run_id = combined_df_merged$run_id))
+
 # Melt the data frame to convert it from wide to long format
 melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
 melted<-melted[,-3]
@@ -788,28 +800,28 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
  
 #TSNE
-set.seed(420)
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
-set.seed(420)
-tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
+set.seed(69)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 5e3, num_threads = 0, perplexity = 100)
+# set.seed(420)
+# tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
 
 # Convert t-SNE results to data frame
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+# tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = factor(pca_labels$province), shape = factor(pca_labels$year))) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
 
-# Plot t-SNE of presence/absence
-ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
+# # Plot t-SNE of presence/absence
+# ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
+#   geom_point(size = 4, alpha = 0.7) +
+#   labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
+#        x = "t-SNE 1", y = "t-SNE 2") +
+#   theme_minimal()
 
 
 #######################################################
@@ -1252,7 +1264,7 @@ ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
 
 
 ##############################
-# ALLELE FREQ PCA
+# ALLELE FREQ TSNE
 #############################
 
 combined_df_merged <- readRDS("combined_df_merged.RDS")
@@ -1352,6 +1364,127 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), shap
 #1) STATISTICS, check nanna's paper (ongoing)
 #2) what to do when pop He is super low and Hw is 0.5 or above... 1-fws ends up HUGE
 #3) Fst
+#4) subsampling
+
+
+#######################################3
+# 11.- pairwise FST 
+#########################################
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
+# pairwise FST comparion = 1 - Hs/HT.... Hs: heterozygosity of each loci per population; HT: average heterozygosity between pop1 and 2 for each loci. heatmap AND distributions (mean tests also)
+
+# 1) calculate heterozygosity of the population (He); pop = province, region
+#import everything into lists
+rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+
+
+# Load each RDS file into the list with the file name as the list name
+He_results_list <- list()
+
+for (file in rds_files) {
+  print(file)
+  file_name <- tools::file_path_sans_ext(basename(file))
+  He_results_list[[file_name]] <- readRDS(file)
+}
+
+# Loop through each element in He_results_list
+processed_He_results <- data.frame()
+
+for (i in seq_along(He_results_list)) {
+  
+  # Summarize He
+  He_results <- moire::summarize_he(He_results_list[[i]])
+  He_results$population <- names(He_results_list[i])
+  
+  # Add the processed He results to the list
+  processed_He_results <- rbind(processed_He_results, He_results)
+}
+
+#formatting categories
+processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
+
+library(stringr)
+processed_He_results <- processed_He_results %>%
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
+         year = substr(population, nchar(population) - 3, nchar(population)))
+
+processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
+processed_He_results$year <- as.numeric(processed_He_results$year)
+
+#separate provinces and regions
+processed_He_results_provinces <- processed_He_results[processed_He_results$geo == "province", ]
+processed_He_results_provinces$pop <- paste0(processed_He_results_provinces$population, "_", processed_He_results_provinces$year)
+  
+processed_He_results_regions<- processed_He_results[processed_He_results$geo == "region", ]
+processed_He_results_regions$pop <- paste0(processed_He_results_regions$population, "_", processed_He_results_regions$year)
+
+# calculate pairwise fst
+
+library(data.table)
+
+# Assuming your data table is named 'df'
+setDT(processed_He_results_provinces)
+
+# Define a function to calculate pairwise Fst
+calculate_pairwise_Fst <- function(pop1, pop2, Hs, Ht) {
+  numerator <- Ht - Hs
+  denominator <- Ht
+  if (denominator == 0) {
+    # Handle division by zero
+    return(NA)
+  } else {
+    return(1 - (numerator / denominator))
+  }
+}
+
+# Group by locus
+results <- processed_He_results_provinces[, {
+  # Calculate Hs for each locus
+  Hs <- post_stat_mean
+  .(Hs = Hs,
+    # For each pair of populations, calculate Ht and Fst
+    lapply(seq_along(unique(pop)), function(i) {
+      pop1 <- unique(pop)[i]
+      Ht_pop1 <- post_stat_mean[pop == pop1]
+      lapply(seq_along(unique(pop)), function(j) {
+        pop2 <- unique(pop)[j]
+        Ht_pop2 <- post_stat_mean[pop == pop2]
+        Ht <- (Ht_pop1 + Ht_pop2) / 2
+        Fst <- calculate_pairwise_Fst(pop1, pop2, Hs, Ht)
+        setNames(list(pop1 = pop1,
+                      pop2 = pop2,
+                      Hs = Hs,
+                      Ht = Ht,
+                      Fst = Fst), locus)
+      })
+    }) 
+  )
+}, by = locus]
+
+# Find the maximum number of columns in the list
+max_cols <- max(sapply(results$V2, length))
+
+# Pad shorter lists with NA values to match the maximum length
+results_padded <- results[, lapply(V2, `length<-`, max_cols)]
+
+# Flatten the list
+results_flattened <- results_padded[, unlist(.SD, recursive = FALSE)]
+
+
+
+
+# Unnest the list column
+results <- rbindlist(lapply(results$V1, data.table))
+
+
+
+# Remove NA values (optional)
+results <- results[complete.cases(results)]
+
+
+
 
 
 
