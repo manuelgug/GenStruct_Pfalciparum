@@ -525,6 +525,8 @@ sample_size_regions
 ################################### 
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
 
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
                                     year = combined_df_merged$year, 
                                     province = combined_df_merged$province,
@@ -622,14 +624,14 @@ for (province in unique_provinces) {
 colors <- brewer.pal(9, "Paired")
 
 # Plot the curves for 2021
-plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Province)", xlim = c(0,85), ylim = c(0,2000))
+plot(accum_curves_2021[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2021 (per Province)", xlim = c(0,85), ylim = c(0,1600))
 for (i in 2:length(accum_curves_2021)) {
   lines(accum_curves_2021[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 65, y = 550, legend = names(accum_curves_2021), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,2200))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,2500))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
@@ -855,6 +857,7 @@ dres0_2021 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
                  alpha = 0.05, nr = 1e3)  
 
 # saveRDS(dres0_2021, "dres0_2021.RDS")
+# dres0_2021 <- readRDS("dres0_2021.RDS")
 
 pdf("dres0_2021_plot.pdf", width = 15, height = 15) 
 
@@ -910,6 +913,7 @@ dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
                      alpha = 0.05, nr = 1e3)  
 
 # saveRDS(dres0_2022, "dres0_2022.RDS")
+# dres0_2022 <- readRDS("dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
 
@@ -944,10 +948,17 @@ dev.off()
 # 9.- calculate He for each population (per year per region/province)
 #######################################################
 
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
 #subset 2021 data
 combined_df_merged_2021 <- combined_df_merged[combined_df_merged$year == "2021", ]
 #subset 2022 data
 combined_df_merged_2022 <- combined_df_merged[combined_df_merged$year == "2022", ]
+
+
+combined_df_merged_2021$allele <- paste0(combined_df_merged_2021$locus, "_", combined_df_merged_2021$pseudo_cigar)
+combined_df_merged_2022$allele <- paste0(combined_df_merged_2022$locus, "_", combined_df_merged_2022$pseudo_cigar)
+
 
 # RUN IN CLUSTER:
 # Define function to run MOIRE and save results
@@ -956,8 +967,8 @@ run_moire <- function(df, output_name) {
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
+  burnin <- 10
+  num_samples <- 10
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
@@ -969,7 +980,7 @@ run_moire <- function(df, output_name) {
   )
   
   # checkpoint
-  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS.RDS"))
+  saveRDS(mcmc_results, paste0("TEST_", output_name, "_MOIRE-RESULTS.RDS"))
 }
 
 # Create a list of data frames and corresponding years
@@ -1110,6 +1121,8 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
     (length(unique(heterozygosity_data_filtered$province)) == length(unique(combined_df_merged$province))) & 
     (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region)))) {
   print("All looks good.")
+}else{
+  print("grab a coffee.")
 }
 
 #WHY IS IT NOT BETWEEN 0 AND 1??? (should it be?)
@@ -1173,7 +1186,7 @@ shapiro_test_results_region
 
 
 ## MOST He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox): 
-# 1) SPATIAL COMPARISONS: same year, across populations 
+# 1) TEMPORAL COMPARISONS: same pop, across years 
 pairwise_province_He_2021 <- pairwise.wilcox.test(combined_data_province[combined_data_province$Year == 2021, ]$He_province, 
                                                   combined_data_province[combined_data_province$Year == 2021, ]$province, p.adjust.method = "bonferroni")
 
@@ -1199,7 +1212,8 @@ pairwise_region_He_2022 <- pairwise.wilcox.test(combined_data_region[combined_da
 p.val_region_He_2022 <- melt(pairwise_region_He_2022[[3]])
 signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
 
-# 2) TEMPORAL COMPARISONS: same population, across years
+
+# 2) SPATIAL COMPARISONS: same year, across pops (significance data for plots)
 
 
 
@@ -1235,6 +1249,46 @@ ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
                     values = c("2022" = "cyan3", "2021" = "orange")) +
   facet_wrap(~ region) +
   theme_minimal()
+
+
+##############################
+# ALLELE FREQ PCA
+#############################
+
+combined_df_merged <- readRDS("combined_df_merged.RDS")
+
+# 1) calculate heterozygosity of the population (He); pop = province, region
+#import everything into lists
+rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+
+
+# Load each RDS file into the list with the file name as the list name
+allele_freqs_list <- list()
+
+for (file in rds_files) {
+  print(file)
+  file_name <- tools::file_path_sans_ext(basename(file))
+  allele_freqs_list[[file_name]] <- readRDS(file)
+}
+
+# Loop through each element in He_results_list
+processed_allele_freq_results <- data.frame()
+
+for (i in seq_along(allele_freqs_list)) {
+  
+  # Summarize He
+  allele_freq_results <- moire::summarize_allele_freqs(allele_freqs_list[[i]])
+  allele_freq_results$population <- names(allele_freqs_list[i])
+  
+  # Add the processed He results to the list
+  processed_allele_freq_results <- rbind(processed_allele_freq_results, allele_freq_results)
+}
+
+#formatting categories
+processed_allele_freq_results$population <- gsub("_MOIRE-RESULTS", "", processed_allele_freq_results$population)
+
+
 
 
 ## TO DO
