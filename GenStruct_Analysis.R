@@ -1420,7 +1420,7 @@ processed_He_results_provinces$pop <- paste0(processed_He_results_provinces$popu
 processed_He_results_regions<- processed_He_results[processed_He_results$geo == "region", ]
 processed_He_results_regions$pop <- paste0(processed_He_results_regions$population, "_", processed_He_results_regions$year)
 
-# calculate pairwise fst
+# calculate pairwise fst ###NOT DONE YET... PLENTY OF QUESTIONS
 
 library(data.table)
 
@@ -1429,7 +1429,7 @@ setDT(processed_He_results_provinces)
 
 # Define a function to calculate pairwise Fst
 calculate_pairwise_Fst <- function(pop1, pop2, Hs, Ht) {
-  numerator <- Ht - Hs
+  numerator <- Hs
   denominator <- Ht
   if (denominator == 0) {
     # Handle division by zero
@@ -1453,11 +1453,14 @@ results <- processed_He_results_provinces[, {
         Ht_pop2 <- post_stat_mean[pop == pop2]
         Ht <- (Ht_pop1 + Ht_pop2) / 2
         Fst <- calculate_pairwise_Fst(pop1, pop2, Hs, Ht)
-        setNames(list(pop1 = pop1,
-                      pop2 = pop2,
-                      Hs = Hs,
-                      Ht = Ht,
-                      Fst = Fst), locus)
+        list(pop1 = pop1,
+             pop2 = pop2,
+             Ht_pop1 = Ht_pop1,
+             Ht_pop2 = Ht_pop2,
+             locus = locus,
+             Hs = Hs[i],
+             Ht = Ht,
+             Fst = Fst[i])
       })
     }) 
   )
@@ -1470,13 +1473,10 @@ max_cols <- max(sapply(results$V2, length))
 results_padded <- results[, lapply(V2, `length<-`, max_cols)]
 
 # Flatten the list
-results_flattened <- results_padded[, unlist(.SD, recursive = FALSE)]
+#results_flattened <- results_padded[, unlist(.SD, recursive = FALSE)]
 
+results_padded$V1[15]
 
-
-
-# Unnest the list column
-results <- rbindlist(lapply(results$V1, data.table))
 
 
 
