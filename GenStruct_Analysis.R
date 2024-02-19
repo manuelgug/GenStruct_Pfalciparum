@@ -967,8 +967,8 @@ run_moire <- function(df, output_name) {
   
   # set MOIRE parameters
   dat_filter <- moire::load_long_form_data(df)
-  burnin <- 10
-  num_samples <- 10
+  burnin <- 1e4
+  num_samples <- 1e4
   pt_chains <- seq(1, .5, length.out = 20)
   
   # run moire
@@ -980,7 +980,7 @@ run_moire <- function(df, output_name) {
   )
   
   # checkpoint
-  saveRDS(mcmc_results, paste0("TEST_", output_name, "_MOIRE-RESULTS.RDS"))
+  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS.RDS"))
 }
 
 # Create a list of data frames and corresponding years
@@ -1257,7 +1257,7 @@ ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
 
 combined_df_merged <- readRDS("combined_df_merged.RDS")
 
-# 1) calculate heterozygosity of the population (He); pop = province, region
+# 1) extract allele freqs
 #import everything into lists
 rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
 rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
@@ -1272,7 +1272,7 @@ for (file in rds_files) {
   allele_freqs_list[[file_name]] <- readRDS(file)
 }
 
-# Loop through each element in He_results_list
+# Loop through each element in allele_freqs_list
 processed_allele_freq_results <- data.frame()
 
 for (i in seq_along(allele_freqs_list)) {
@@ -1288,6 +1288,63 @@ for (i in seq_along(allele_freqs_list)) {
 #formatting categories
 processed_allele_freq_results$population <- gsub("_MOIRE-RESULTS", "", processed_allele_freq_results$population)
 
+library(stringr)
+processed_allele_freq_results <- processed_allele_freq_results %>%
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
+         year = substr(population, nchar(population) - 3, nchar(population)))
+
+processed_allele_freq_results$population <- gsub("TEST_|_202.*", "", processed_allele_freq_results$population)
+processed_allele_freq_results$year <- as.numeric(processed_allele_freq_results$year)
+processed_allele_freq_results$category <- paste0(processed_allele_freq_results$population, "_", processed_allele_freq_results$year)
+
+
+# Melt the data frame to convert it from wide to long format
+melted <- melt(processed_allele_freq_results, id.vars = c("category", "post_allele_freqs_mean"), measure.vars = "allele")
+melted<-melted[,-3]
+
+library(tidyr)
+
+rearranged_processed_allele_freq_results <- melted %>%
+  pivot_wider(
+    names_from = value,
+    values_from = post_allele_freqs_mean
+  )
+
+# format
+rearranged_processed_allele_freq_results <- as.data.frame(rearranged_processed_allele_freq_results)
+rownames(rearranged_processed_allele_freq_results) <- rearranged_processed_allele_freq_results$category
+rearranged_processed_allele_freq_results <- rearranged_processed_allele_freq_results[, -1]
+rearranged_processed_allele_freq_results <- replace(rearranged_processed_allele_freq_results, is.na(rearranged_processed_allele_freq_results), 0)
+
+
+# Find rows with "Centre", "North", or "South" in their names
+region_columns <- grepl("Centre|North|South", rownames(rearranged_processed_allele_freq_results))
+rearranged_processed_allele_freq_results_region <- rearranged_processed_allele_freq_results[region_columns, ]
+rearranged_processed_allele_freq_results_province <- rearranged_processed_allele_freq_results[!region_columns, ]
+
+# Split row names by "_"
+metadata_province <- str_split_fixed(rownames(rearranged_processed_allele_freq_results_province), "_", 2)
+metadata_region <- str_split_fixed(rownames(rearranged_processed_allele_freq_results_region), "_", 2)
+
+# Create a data frame with two columns named site and year
+metadata_province <- data.frame(site = metadata_province[, 1], year = metadata_province[, 2], row.names = NULL)
+metadata_region <- data.frame(site = metadata_region[, 1], year = metadata_region[, 2], row.names = NULL)
+
+
+# tsne of provinces
+perplexity <- floor((nrow(metadata_province) - 1) / 3) #highest possible
+set.seed(69)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_province), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = perplexity)
+
+# Convert t-SNE results to data frame
+tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
+
+# Plot t-SNE of freqs
+ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), shape = factor(metadata_province$year))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "t-SNE of Allele Frequencies",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
 
 
 
