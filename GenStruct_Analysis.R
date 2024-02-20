@@ -1438,7 +1438,7 @@ sample_size_regions$pop <- paste0(sample_size_regions$region,"_", sample_size_re
 sample_size_regions
 
 
-# CALCULATE pairwise Fst 
+# CALCULATE pairwise Fst ## STILL NOT COMPLETELY SURE ABOUT THIS, BUT HEY...
 # Fst = (Ht - Hs) / Ht [same as 1 - Hs / Ht]*;
 # Ht is (n1*Hs1 + n2*Hs2) / n1+n2 [n is individuals of each pop]; 
 # Hs = Hs1 + Hs2 / 2 [Hs1 and Hs2 are post_stat_mean (heterozygosity for each locus) calculated by moire for each pop].
@@ -1502,13 +1502,135 @@ fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #
 
 #fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
-
-#mean Fst across loci for each pair of populations
-mean_Fst<- fst_results_df %>% 
-  group_by(paste0(pop1, "_", pop2)) %>%
+mean_Fst <- fst_results_df %>%
+  group_by(pop1, pop2) %>%
   summarize(mean_Fst = mean(Fst))
 
-fst_results_df[fst_results_df$pop1 == "Centre_2021" & fst_results_df$pop2 == "Centre_2021", ]
+# Function to create heatmap
+create_heatmap <- function(data, title) {
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
+    geom_tile() +
+    geom_text(color = "black") +
+    scale_fill_gradient(low = "blue", high = "red", limits = c(0, 0.04)) +  # Adjust scale limits
+    labs(title = title,
+         x = "Population 2",
+         y = "Population 1",
+         fill = "Mean Fst") +
+    theme_minimal()
+}
+
+# Filter data for 2021 comparisons
+mean_Fst_2021 <- mean_Fst %>%
+  filter(grepl("2021", pop1) & grepl("2021", pop2))
+
+# Create heatmap for 2021 comparisons
+heatmap_2021 <- create_heatmap(mean_Fst_2021, "Mean Fst Heatmap - 2021 Comparisons")
+
+# Filter data for 2022 comparisons
+mean_Fst_2022 <- mean_Fst %>%
+  filter(grepl("2022", pop1) & grepl("2022", pop2))
+
+# Create heatmap for 2022 comparisons
+heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
+
+# Display the heatmaps
+print(heatmap_2021)
+print(heatmap_2022)
+
+
+#2) FOR PROVINCES
+
+fts_input_provinces <- merge(processed_He_results_provinces[c("locus", "post_stat_mean", "pop")], sample_size_provinces[c("unique_NIDA2_count", "pop")], by = c("pop"))
+
+# Generate all possible combinations of unique values
+unique_pops <- unique(fts_input_provinces$pop)
+combinations <- expand.grid(pop1 = unique_pops, pop2 = unique_pops)
+
+# Create an empty dataframe to store the results
+fst_results_df <- data.frame(matrix(ncol = 7, nrow = 1))
+colnames(fst_results_df) <- c("pop1", "pop2", "Hs1", "Hs2", "n1", "n2", "locus")
+
+# Loop through each locus
+for (locus in unique(fts_input_provinces$locus)) {
+  locus_subset <- fts_input_provinces[fts_input_provinces$locus == locus,]
+  
+  # Loop through each combination of populations
+  for (i in 1:nrow(combinations)) {
+    pop1 <- as.character(combinations$pop1[i])
+    pop2 <- as.character(combinations$pop2[i])
+    
+    Hs1 <- locus_subset[locus_subset$pop == pop1, ]$post_stat_mean
+    n1 <- locus_subset[locus_subset$pop == pop1, ]$unique_NIDA2_count
+    
+    Hs2 <- locus_subset[locus_subset$pop == pop2, ]$post_stat_mean
+    n2 <- locus_subset[locus_subset$pop == pop2, ]$unique_NIDA2_count
+    
+    row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
+    fst_results_df <- rbind(fst_results_df, row)
+  }
+}
+
+#formating
+fst_results_df <- fst_results_df[-1,]
+fst_results_df$Hs1 <- round(as.numeric(fst_results_df$Hs1), 3)
+fst_results_df$Hs2 <- round(as.numeric(fst_results_df$Hs2),3)
+fst_results_df$n1 <- round(as.numeric(fst_results_df$n1),3)
+fst_results_df$n2 <- round(as.numeric(fst_results_df$n2),3)
+
+if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_provinces$locus))){
+  print("Got all expected combinations for per locus pairwise Fst calculations")
+}else{
+  print("grab a coffee.")
+}
+
+#calculate Hs for populations
+fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
+fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
+
+#Calculate Ht (uses sample sizes for each pop)
+fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
+fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
+
+#calcualte Fst
+fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #the same as 1- (fst_results_df$Hs/fst_results_df$Ht)
+
+#fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
+
+mean_Fst <- fst_results_df %>%
+  group_by(pop1, pop2) %>%
+  summarize(mean_Fst = mean(Fst))
+
+# Function to create heatmap
+create_heatmap <- function(data, title) {
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
+    geom_tile() +
+    geom_text(color = "black") +
+    scale_fill_gradient(low = "blue", high = "red", limits = c(0, 0.04)) +  # Adjust scale limits
+    labs(title = title,
+         x = "Population 2",
+         y = "Population 1",
+         fill = "Mean Fst") +
+    theme_minimal()
+}
+
+# Filter data for 2021 comparisons
+mean_Fst_2021 <- mean_Fst %>%
+  filter(grepl("2021", pop1) & grepl("2021", pop2))
+
+# Create heatmap for 2021 comparisons
+heatmap_2021 <- create_heatmap(mean_Fst_2021, "Mean Fst Heatmap - 2021 Comparisons")
+
+# Filter data for 2022 comparisons
+mean_Fst_2022 <- mean_Fst %>%
+  filter(grepl("2022", pop1) & grepl("2022", pop2))
+
+# Create heatmap for 2022 comparisons
+heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
+
+# Display the heatmaps
+print(heatmap_2021)
+print(heatmap_2022)
+
 
 
 
