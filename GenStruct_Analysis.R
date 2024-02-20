@@ -1500,7 +1500,7 @@ fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 #calcualte Fst
 fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #the same as 1- (fst_results_df$Hs/fst_results_df$Ht)
 
-#fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
+fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
 mean_Fst <- fst_results_df %>%
   group_by(pop1, pop2) %>%
@@ -1511,7 +1511,7 @@ create_heatmap <- function(data, title) {
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
     geom_tile() +
     geom_text(color = "black") +
-    scale_fill_gradient(low = "blue", high = "red", limits = c(0, 0.04)) +  # Adjust scale limits
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
     labs(title = title,
          x = "Population 2",
          y = "Population 1",
@@ -1547,7 +1547,7 @@ unique_pops <- unique(fts_input_provinces$pop)
 combinations <- expand.grid(pop1 = unique_pops, pop2 = unique_pops)
 
 # Create an empty dataframe to store the results
-fst_results_df <- data.frame(matrix(ncol = 7, nrow = 1))
+fst_results_df_procinves <- data.frame(matrix(ncol = 7, nrow = 1))
 colnames(fst_results_df) <- c("pop1", "pop2", "Hs1", "Hs2", "n1", "n2", "locus")
 
 # Loop through each locus
@@ -1566,37 +1566,37 @@ for (locus in unique(fts_input_provinces$locus)) {
     n2 <- locus_subset[locus_subset$pop == pop2, ]$unique_NIDA2_count
     
     row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
-    fst_results_df <- rbind(fst_results_df, row)
+    fst_results_df_procinves <- rbind(fst_results_df_procinves, row)
   }
 }
 
 #formating
-fst_results_df <- fst_results_df[-1,]
-fst_results_df$Hs1 <- round(as.numeric(fst_results_df$Hs1), 3)
-fst_results_df$Hs2 <- round(as.numeric(fst_results_df$Hs2),3)
-fst_results_df$n1 <- round(as.numeric(fst_results_df$n1),3)
-fst_results_df$n2 <- round(as.numeric(fst_results_df$n2),3)
+fst_results_df_procinves <- fst_results_df_procinves[-1,]
+fst_results_df_procinves$Hs1 <- round(as.numeric(fst_results_df_procinves$Hs1), 3)
+fst_results_df_procinves$Hs2 <- round(as.numeric(fst_results_df_procinves$Hs2),3)
+fst_results_df_procinves$n1 <- round(as.numeric(fst_results_df_procinves$n1),3)
+fst_results_df_procinves$n2 <- round(as.numeric(fst_results_df_procinves$n2),3)
 
-if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_provinces$locus))){
+if (nrow(fst_results_df_procinves) == nrow(combinations)*length(unique(fts_input_provinces$locus))){
   print("Got all expected combinations for per locus pairwise Fst calculations")
 }else{
   print("grab a coffee.")
 }
 
 #calculate Hs for populations
-fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
-fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
+fst_results_df_procinves$Hs <- (fst_results_df_procinves$Hs1 + fst_results_df_procinves$Hs2) / 2
+fst_results_df_procinves$Hs <- round(as.numeric(fst_results_df_procinves$Hs),3)
 
 #Calculate Ht (uses sample sizes for each pop)
-fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
-fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
+fst_results_df_procinves$Ht <- ((fst_results_df_procinves$n1 * fst_results_df_procinves$Hs1)+ (fst_results_df_procinves$n2 * fst_results_df_procinves$Hs2))/(fst_results_df_procinves$n1 + fst_results_df_procinves$n2)
+fst_results_df_procinves$Ht <- round(as.numeric(fst_results_df_procinves$Ht),3)
 
 #calcualte Fst
-fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #the same as 1- (fst_results_df$Hs/fst_results_df$Ht)
+fst_results_df_procinves$Fst <- (fst_results_df_procinves$Ht -fst_results_df_procinves$Hs)/fst_results_df_procinves$Ht #the same as 1- (fst_results_df_procinves$Hs/fst_results_df_procinves$Ht)
 
-#fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
+fst_results_df_procinves<- fst_results_df_procinves[!is.na(fst_results_df_procinves$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
-mean_Fst <- fst_results_df %>%
+mean_Fst <- fst_results_df_procinves %>%
   group_by(pop1, pop2) %>%
   summarize(mean_Fst = mean(Fst))
 
@@ -1605,7 +1605,7 @@ create_heatmap <- function(data, title) {
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
     geom_tile() +
     geom_text(color = "black") +
-    scale_fill_gradient(low = "blue", high = "red", limits = c(0, 0.04)) +  # Adjust scale limits
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
     labs(title = title,
          x = "Population 2",
          y = "Population 1",
