@@ -1368,7 +1368,7 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), shap
 
 
 #######################################3
-# 11.- pairwise FST 
+# 11.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
 combined_df_merged <- readRDS("combined_df_merged.RDS")
 
@@ -1420,70 +1420,95 @@ processed_He_results_provinces$pop <- paste0(processed_He_results_provinces$popu
 processed_He_results_regions<- processed_He_results[processed_He_results$geo == "region", ]
 processed_He_results_regions$pop <- paste0(processed_He_results_regions$population, "_", processed_He_results_regions$year)
 
-# calculate pairwise fst ###NOT DONE YET... PLENTY OF QUESTIONS
 
-library(data.table)
+#sample sizes for each population
 
-# Assuming your data table is named 'df'
-setDT(processed_He_results_provinces)
+sample_size_provinces <- combined_df_merged %>%
+  group_by(year, province) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
-# Define a function to calculate pairwise Fst
-calculate_pairwise_Fst <- function(pop1, pop2, Hs, Ht) {
-  numerator <- Hs
-  denominator <- Ht
-  if (denominator == 0) {
-    # Handle division by zero
-    return(NA)
-  } else {
-    return(1 - (numerator / denominator))
+sample_size_provinces$pop <- paste0(sample_size_provinces$province,"_", sample_size_provinces$year)
+sample_size_provinces
+
+sample_size_regions <- combined_df_merged %>%
+  group_by(year, region) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_regions$pop <- paste0(sample_size_regions$region,"_", sample_size_regions$year)
+sample_size_regions
+
+
+# CALCULATE pairwise Fst 
+# Fst = (Ht - Hs) / Ht [same as 1 - Hs / Ht]*;
+# Ht is (n1*Hs1 + n2*Hs2) / n1+n2 [n is individuals of each pop]; 
+# Hs = Hs1 + Hs2 / 2 [Hs1 and Hs2 are post_stat_mean (heterozygosity for each locus) calculated by moire for each pop].
+# THIS IS DONE FOR EACH LOCUS
+
+#1) FOR REGIONS
+
+fts_input_regions <- merge(processed_He_results_regions[c("locus", "post_stat_mean", "pop")], sample_size_regions[c("unique_NIDA2_count", "pop")], by = c("pop"))
+
+# Generate all possible combinations of unique values
+unique_pops <- unique(fts_input_regions$pop)
+combinations <- expand.grid(pop1 = unique_pops, pop2 = unique_pops)
+
+# Create an empty dataframe to store the results
+fst_results_df <- data.frame(matrix(ncol = 7, nrow = 1))
+colnames(fst_results_df) <- c("pop1", "pop2", "Hs1", "Hs2", "n1", "n2", "locus")
+
+# Loop through each locus
+for (locus in unique(fts_input_regions$locus)) {
+  locus_subset <- fts_input_regions[fts_input_regions$locus == locus,]
+  
+  # Loop through each combination of populations
+  for (i in 1:nrow(combinations)) {
+    pop1 <- as.character(combinations$pop1[i])
+    pop2 <- as.character(combinations$pop2[i])
+    
+    Hs1 <- locus_subset[locus_subset$pop == pop1, ]$post_stat_mean
+    n1 <- locus_subset[locus_subset$pop == pop1, ]$unique_NIDA2_count
+    
+    Hs2 <- locus_subset[locus_subset$pop == pop2, ]$post_stat_mean
+    n2 <- locus_subset[locus_subset$pop == pop2, ]$unique_NIDA2_count
+    
+    row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
+    fst_results_df <- rbind(fst_results_df, row)
   }
 }
 
-# Group by locus
-results <- processed_He_results_provinces[, {
-  # Calculate Hs for each locus
-  Hs <- post_stat_mean
-  .(Hs = Hs,
-    # For each pair of populations, calculate Ht and Fst
-    lapply(seq_along(unique(pop)), function(i) {
-      pop1 <- unique(pop)[i]
-      Ht_pop1 <- post_stat_mean[pop == pop1]
-      lapply(seq_along(unique(pop)), function(j) {
-        pop2 <- unique(pop)[j]
-        Ht_pop2 <- post_stat_mean[pop == pop2]
-        Ht <- (Ht_pop1 + Ht_pop2) / 2
-        Fst <- calculate_pairwise_Fst(pop1, pop2, Hs, Ht)
-        list(pop1 = pop1,
-             pop2 = pop2,
-             Ht_pop1 = Ht_pop1,
-             Ht_pop2 = Ht_pop2,
-             locus = locus,
-             Hs = Hs[i],
-             Ht = Ht,
-             Fst = Fst[i])
-      })
-    }) 
-  )
-}, by = locus]
+#formating
+fst_results_df <- fst_results_df[-1,]
+fst_results_df$Hs1 <- round(as.numeric(fst_results_df$Hs1), 3)
+fst_results_df$Hs2 <- round(as.numeric(fst_results_df$Hs2),3)
+fst_results_df$n1 <- round(as.numeric(fst_results_df$n1),3)
+fst_results_df$n2 <- round(as.numeric(fst_results_df$n2),3)
 
-# Find the maximum number of columns in the list
-max_cols <- max(sapply(results$V2, length))
+if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_regions$locus))){
+  print("Got all expected combinations for per locus pairwise Fst calculations")
+}else{
+  print("grab a coffee.")
+}
 
-# Pad shorter lists with NA values to match the maximum length
-results_padded <- results[, lapply(V2, `length<-`, max_cols)]
+#calculate Hs for populations
+fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
+fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
 
-# Flatten the list
-#results_flattened <- results_padded[, unlist(.SD, recursive = FALSE)]
+#Calculate Ht (uses sample sizes for each pop)
+fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
+fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 
-results_padded$V1[15]
+#calcualte Fst
+fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #the same as 1- (fst_results_df$Hs/fst_results_df$Ht)
+
+#fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
 
+#mean Fst across loci for each pair of populations
+mean_Fst<- fst_results_df %>% 
+  group_by(paste0(pop1, "_", pop2)) %>%
+  summarize(mean_Fst = mean(Fst))
 
-
-# Remove NA values (optional)
-results <- results[complete.cases(results)]
-
-
+fst_results_df[fst_results_df$pop1 == "Centre_2021" & fst_results_df$pop2 == "Centre_2021", ]
 
 
 
