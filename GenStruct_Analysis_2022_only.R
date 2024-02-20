@@ -1012,10 +1012,10 @@ mean_Fws_per_individual<- heterozygosity_data_filtered %>%
 
 # STATISTICAL ANALYSES:::     CHECK CAREFULLY!!!!!
 # Filter data by province and region
-combined_data_province <- rbind(data.frame(Year = "2022", He_province = processed_He_results[processed_He_results$geo == "province", ]$post_stat_mean, 
+combined_data_province <- rbind(data.frame(He_province = processed_He_results[processed_He_results$geo == "province", ]$post_stat_mean, 
                                            province = processed_He_results[processed_He_results$geo == "province", ]$population))
 
-combined_data_region <- rbind(data.frame(Year = "2022", He_region = processed_He_results[processed_He_results$geo == "region", ]$post_stat_mean, 
+combined_data_region <- rbind(data.frame(He_region = processed_He_results[processed_He_results$geo == "region", ]$post_stat_mean, 
                                          region = processed_He_results[processed_He_results$geo == "region", ]$population))
 
 
@@ -1079,33 +1079,29 @@ signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <
 # Changes in He distributions and means by year
 #provinces
 mean_data <- combined_data_province %>%
-  group_by(Year, province) %>%
+  group_by(province) %>%
   summarize(mean_He = mean(He_province, na.rm = TRUE))
 
-ggplot(combined_data_province, aes(x = He_province, fill = Year)) +
+ggplot(combined_data_province, aes(x = He_province)) +
   geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data, aes(xintercept = mean_He, color = Year), linetype = "solid") +
-  labs(title = "Province Heterozygosity by Year",
+  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid") +
+  labs(title = "Province Heterozygosity",
        x = "He",
        y = "Frequency") +
-  scale_fill_manual(name = "Year", 
-                    values = c("2022" = "cyan3", "2021" = "orange")) +
   facet_wrap(~ province) +
   theme_minimal()
 
 #regions
 mean_data <- combined_data_region %>%
-  group_by(Year, region) %>%
+  group_by(region) %>%
   summarize(mean_He = mean(He_region, na.rm = TRUE))
 
-ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
+ggplot(combined_data_region, aes(x = He_region)) +
   geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data, aes(xintercept = mean_He, color = Year), linetype = "solid") +
-  labs(title = "Region Heterozygosity by Year",
+  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid") +
+  labs(title = "Region Heterozygosity",
        x = "He",
        y = "Frequency") +
-  scale_fill_manual(name = "Year", 
-                    values = c("2022" = "cyan3", "2021" = "orange")) +
   facet_wrap(~ region) +
   theme_minimal()
 
@@ -1114,7 +1110,7 @@ ggplot(combined_data_region, aes(x = He_region, fill = Year)) +
 # ALLELE FREQ TSNE
 #############################
 
-combined_df_merged <- readRDS("combined_df_merged.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 # 1) extract allele freqs
 #import everything into lists
@@ -1199,7 +1195,7 @@ tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_pr
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), shape = factor(metadata_province$year))) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) + # shape = factor(metadata_province$site)
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Allele Frequencies",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1217,7 +1213,7 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), shap
 #######################################3
 # 11.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
-combined_df_merged <- readRDS("combined_df_merged.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 # pairwise FST comparion = 1 - Hs/HT.... Hs: heterozygosity of each loci per population; HT: average heterozygosity between pop1 and 2 for each loci. heatmap AND distributions (mean tests also)
 
@@ -1366,13 +1362,6 @@ create_heatmap <- function(data, title) {
     theme_minimal()
 }
 
-# Filter data for 2021 comparisons
-mean_Fst_2021 <- mean_Fst %>%
-  filter(grepl("2021", pop1) & grepl("2021", pop2))
-
-# Create heatmap for 2021 comparisons
-heatmap_2021 <- create_heatmap(mean_Fst_2021, "Mean Fst Heatmap - 2021 Comparisons")
-
 # Filter data for 2022 comparisons
 mean_Fst_2022 <- mean_Fst %>%
   filter(grepl("2022", pop1) & grepl("2022", pop2))
@@ -1380,8 +1369,6 @@ mean_Fst_2022 <- mean_Fst %>%
 # Create heatmap for 2022 comparisons
 heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
 
-# Display the heatmaps
-print(heatmap_2021)
 print(heatmap_2022)
 
 
@@ -1460,13 +1447,6 @@ create_heatmap <- function(data, title) {
     theme_minimal()
 }
 
-# Filter data for 2021 comparisons
-mean_Fst_2021 <- mean_Fst %>%
-  filter(grepl("2021", pop1) & grepl("2021", pop2))
-
-# Create heatmap for 2021 comparisons
-heatmap_2021 <- create_heatmap(mean_Fst_2021, "Mean Fst Heatmap - 2021 Comparisons")
-
 # Filter data for 2022 comparisons
 mean_Fst_2022 <- mean_Fst %>%
   filter(grepl("2022", pop1) & grepl("2022", pop2))
@@ -1475,7 +1455,6 @@ mean_Fst_2022 <- mean_Fst %>%
 heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
 
 # Display the heatmaps
-print(heatmap_2021)
 print(heatmap_2022)
 
 
