@@ -1355,10 +1355,6 @@ create_heatmap <- function(data, title) {
     geom_tile() +
     geom_text(color = "black") +
     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
-    labs(title = title,
-         x = "Population 2",
-         y = "Population 1",
-         fill = "Mean Fst") +
     theme_minimal()
 }
 
@@ -1367,8 +1363,7 @@ mean_Fst_2022 <- mean_Fst %>%
   filter(grepl("2022", pop1) & grepl("2022", pop2))
 
 # Create heatmap for 2022 comparisons
-heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
-
+heatmap_2022 <- create_heatmap(mean_Fst_2022)
 print(heatmap_2022)
 
 
@@ -1440,10 +1435,6 @@ create_heatmap <- function(data, title) {
     geom_tile() +
     geom_text(color = "black") +
     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
-    labs(title = title,
-         x = "Population 2",
-         y = "Population 1",
-         fill = "Mean Fst") +
     theme_minimal()
 }
 
@@ -1451,8 +1442,14 @@ create_heatmap <- function(data, title) {
 mean_Fst_2022 <- mean_Fst %>%
   filter(grepl("2022", pop1) & grepl("2022", pop2))
 
+#################################################################
+## change orfer. first remove *_2022 and then order as factor for better interpretability
+mean_Fst_2022$pop1 <- factor(mean_Fst_2022$pop1, levels = provinces)
+mean_Fst_2022$pop2 <- factor(mean_Fst_2022$pop2, levels = regions)
+#################################################################
+
 # Create heatmap for 2022 comparisons
-heatmap_2022 <- create_heatmap(mean_Fst_2022, "Mean Fst Heatmap - 2022 Comparisons")
+heatmap_2022 <- create_heatmap(mean_Fst_2022, "")
 
 # Display the heatmaps
 print(heatmap_2022)
