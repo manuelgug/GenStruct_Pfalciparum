@@ -755,30 +755,145 @@ rearranged_pres_abs <- rearranged %>%
 rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
  
+
+#PCA
+
+# Perform PCA
+pca_result <- prcomp(rearranged, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+# Perform PCA prsence/absence
+pca_result <- prcomp(rearranged_pres_abs, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+#PCoA
+pcoa_result <- cmdscale(dist(rearranged), k = 2, eig = TRUE)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$points)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+
+ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+#PCoA presence/absence
+pcoa_result <- cmdscale(dist(rearranged_pres_abs), k = 2, eig = TRUE)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$points)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+
+ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
 #TSNE
 set.seed(69)
 perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
-# set.seed(420)
-# tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
+set.seed(69)
+tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
 
 # Convert t-SNE results to data frame
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-# tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region)
+tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region)
+
+# Order factors
+tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
+tsne_data_freqs$region <- factor(tsne_data_freqs$region, levels = regions)
+tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = provinces)
+tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = factor(pca_labels$province), shape = factor(pca_labels$region))) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
 
-# # Plot t-SNE of presence/absence
-# ggplot(tsne_data_pres_abs, aes(V1, V2, color = factor(pca_labels$region), shape = factor(pca_labels$year))) +
-#   geom_point(size = 4, alpha = 0.7) +
-#   labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
-#        x = "t-SNE 1", y = "t-SNE 2") +
-#   theme_minimal()
+# Plot t-SNE of presence/absence
+ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
 
 
 #######################################################
@@ -809,7 +924,7 @@ afreq <- calcAfreq(dsmp, coi, tol = 1e-5)
 str(afreq, list.len = 2)
 
 #order provinces from north to wouth
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica", "Sofala", "Inhambane", "Maputo") #ordered from north to south
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 nsite     <- table(meta$province)[provinces]
 ord       <- order(factor(meta$province, levels = provinces))
 dsmp <- dsmp[ord]
