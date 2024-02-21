@@ -1141,10 +1141,18 @@ ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$pro
 
 
 #PCoA
-pcoa_result <- cmdscale(dist(rearranged), k = 2, eig = TRUE)
+library(vegan)  # For the vegdist() function
+library(ape)    # For the pcoa() function
+library(ggplot2)
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
 
 # Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$points)
+pcs <- as.data.frame(pcoa_result$vectors)
 
 # Combine principal coordinate scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
@@ -1155,21 +1163,27 @@ regions <- c("North", "Centre", "South")
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 
-pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+# # Plot PCoA
+# pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
 
-ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = region)) +
   geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  # labs(title = "",
+  #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+  #      y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
   theme_minimal()
 
 
 #PCoA presence/absence
-pcoa_result <- cmdscale(dist(rearranged_pres_abs), k = 2, eig = TRUE)
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged_pres_abs, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
 
 # Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$points)
+pcs <- as.data.frame(pcoa_result$vectors)
 
 # Combine principal coordinate scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
@@ -1180,13 +1194,14 @@ regions <- c("North", "Centre", "South")
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 
-pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+# # Plot PCoA
+# pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
 
-ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = region)) +
   geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  # labs(title = "",
+  #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+  #      y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
   theme_minimal()
 
 
@@ -1628,18 +1643,8 @@ create_heatmap <- function(data, title) {
     theme_minimal()
 }
 
-# Filter data for 2022 comparisons
-mean_Fst_2022 <- mean_Fst %>%
-  filter(grepl("2022", pop1) & grepl("2022", pop2))
-
-#################################################################
-## change orfer. first remove *_2022 and then order as factor for better interpretability
-mean_Fst_2022$pop1 <- factor(mean_Fst_2022$pop1, levels = provinces)
-mean_Fst_2022$pop2 <- factor(mean_Fst_2022$pop2, levels = regions)
-#################################################################
-
 # Create heatmap for 2022 comparisons
-heatmap_2022 <- create_heatmap(mean_Fst_2022, "")
+heatmap_2022 <- create_heatmap(mean_Fst, "")
 
 # Display the heatmaps
 print(heatmap_2022)
