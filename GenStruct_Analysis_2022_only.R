@@ -358,6 +358,20 @@ loci_to_keep <- locus_counts$locus
 
 combined_df_merged <- combined_df_merged[combined_df_merged$locus %in% loci_to_keep, ]
 
+library(forcats)
+
+# MANAGE SEASONALITY
+seasonality_factor <- as_factor(combined_df_merged$seasonality)
+seasonality_recode <- recode(seasonality_factor, "1" = "Rainy", "2" = "Dry")
+seasonality_char <- as.character(seasonality_recode)
+combined_df_merged$seasonality <- seasonality_char
+
+combined_df_merged$province <- ifelse(
+  is.na(combined_df_merged$seasonality),
+  combined_df_merged$province,
+  paste0(combined_df_merged$province, "_", combined_df_merged$seasonality)
+)
+
 
 # JUST IN CASE... recalculate n.alleles for each locus of each sample
 combined_df_merged <- combined_df_merged %>%
@@ -384,7 +398,7 @@ saveRDS(combined_df_merged, "combined_df_merged_2022_only.RDS")
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
 
 sample_size_provinces <- combined_df_merged %>%
-  group_by(year, province) %>%
+  group_by(province) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
 sample_size_provinces
@@ -427,7 +441,8 @@ saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only.RDS
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("2021_useless_data/all__samples_no_further_filtering_MOIRE-RESULTS.RDS") # change name to final file, THIS IS TEST!!
+mcmc_results <- readRDS("TEST_all_samples_complete_filtered_MOIRE-RESULTS_2022_only.RDS") # change name to final file, THIS IS TEST!!
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
@@ -440,27 +455,47 @@ coi_results$polyclonal_from_ecoi_med <- ifelse(coi_results$post_effective_coi_me
 
 #merge with categorical variables
 colnames(coi_results)[1] <- "NIDA2"
-coi_results <- merge(coi_results, db[c("NIDA2", "year", "province", "region")], by="NIDA2")
+coi_results <- merge(coi_results, db[c("NIDA2", "province", "region", "seasonality")], by="NIDA2")
 
-coi_results <- coi_results[coi_results$year == 2022,]  #TEMPORAL FIX UNTIL MOIRE DATA FOR 2022 ONLY COMES OOUT
+
+# MANAGE SEASONALITY
+seasonality_factor <- as_factor(coi_results$seasonality)
+seasonality_recode <- recode(seasonality_factor, "1" = "Rainy", "2" = "Dry")
+seasonality_char <- as.character(seasonality_recode)
+coi_results$seasonality <- seasonality_char
+
+coi_results$province <- ifelse(
+  is.na(coi_results$seasonality),
+  coi_results$province,
+  paste0(coi_results$province, "_", coi_results$seasonality)
+)
+
+#coi_results <- coi_results[coi_results$year == 2022,]  #TEMPORAL FIX UNTIL MOIRE DATA FOR 2022 ONLY COMES OOUT
+
 
 # % polyclonal infections on each province and region per year
 polyclonal_percentage_region <- coi_results %>%
-  group_by(region, year) %>%
+  group_by(region) %>%
   summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
+  ungroup()
+
+polyclonal_percentage_province <- coi_results %>%
+  group_by(province) %>%
+  summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
 
 
 
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica", "Sofala", "Inhambane", "Maputo") #ordered from north to south
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
 coi_results$province <- factor(coi_results$province, levels = provinces)
 coi_results$region <- factor(coi_results$region, levels = regions)
 
-ggplot(coi_results, aes(x = naive_coi, fill = province)) +
+
+a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
-  facet_wrap(~ province , scales = "fixed", nrow = 1) +  # Encapsulate each set of provinces by region
+  facet_wrap(~ province , scales = "fixed", nrow = 1) + 
   labs(title = "",
        x = "Naive COI",
        y = "Frequency",
@@ -468,7 +503,9 @@ ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   theme_minimal() +
   guides(fill = FALSE) 
 
-ggplot(coi_results, aes(x = naive_coi, fill = region)) +
+a
+
+b <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_grid( ~ region, scales = "free") +
   labs(title = "",
@@ -478,64 +515,50 @@ ggplot(coi_results, aes(x = naive_coi, fill = region)) +
   theme_minimal() +
   guides(fill = FALSE) 
 
-
-
-
-a <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = factor(year))) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(x = "Region", y = "% Polyclonal Infections") +
-  facet_wrap(~region, scales = "free", ncol = 3) +
-  scale_fill_manual(values = c("2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()
-a
-
-polyclonal_percentage_province <- coi_results %>%
-  group_by(province, year) %>%
-  summarise(polyclonal_percentage_province = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
-  ungroup()
-
-b <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province, fill = factor(year))) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(x = "Province", y = "%Polyclonal Infections") +
-  facet_wrap(~province, scales = "free", ncol = 3) +
-  scale_fill_manual(values = c("2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()
 b
 
-# post_effective_coi_med
-coi_results$year <- factor(coi_results$year)
+c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
+  facet_wrap(~ province , scales = "fixed", nrow = 1) + 
+  labs(title = "",
+       x = "Post Effective COI Median",
+       y = "Frequency",
+       fill = "Province") +
+  theme_minimal() +
+  guides(fill = FALSE) 
 
-c <- ggplot(coi_results, aes(x = region, y = post_effective_coi_med, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Region", y = "Post Effective COI Median") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
 c
 
-d <-ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Province", y = "Post Effective COI Median") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
-  theme_minimal()+
-  ylim(0, NA)
+d <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = region)) +
+  geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
+  facet_grid( ~ region, scales = "free") +
+  labs(title = "",
+       x = "Post Effective COI Median",
+       y = "Frequency",
+       fill = "Region") +
+  theme_minimal() +
+  guides(fill = FALSE) 
+
 d
 
-# naive coi
-e <- ggplot(coi_results, aes(x = region, y = naive_coi, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Region", y = "Naive COI") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+
+e <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = region)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "", y = "% Polyclonal Infections") +
+  #facet_wrap(~region, scales = "fixed", ncol = 3) +
+  #scale_fill_manual(values = c("2022" = "orange")) + 
   theme_minimal()+
-  ylim(0, NA)
+  guides(fill = FALSE) 
 e
 
-f <-ggplot(coi_results, aes(x = province, y = naive_coi, fill = year)) +
-  geom_boxplot() +
-  labs(x = "Province", y = "Naive COI") +
-  scale_fill_manual(values = c("2021" = "cyan3", "2022" = "orange")) +  # Adjust colors as needed
+
+f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = province))+
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "", y = "%Polyclonal Infections") +
+  #facet_wrap(~province, scales = "fixed", nrow = 1) +
+  #scale_fill_manual(values = c("2022" = "orange")) + 
   theme_minimal()+
-  ylim(0, NA)
+  guides(fill = FALSE) 
 f
 
 
@@ -603,14 +626,14 @@ for (province in unique_provinces) {
 }
 
 # Select 9 colors from the Paired palette
-colors <- brewer.pal(9, "Paired")
+colors <- brewer.pal(11, "Paired")
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,200), ylim = c(0,2500))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,130), ylim = c(0,2000))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
-legend(x = 160, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 #conclusion....
 
