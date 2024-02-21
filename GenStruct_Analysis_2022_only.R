@@ -491,7 +491,8 @@ regions <- c("North", "Centre", "South")
 
 coi_results$province <- factor(coi_results$province, levels = provinces)
 coi_results$region <- factor(coi_results$region, levels = regions)
-
+polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
+polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
 
 a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
@@ -629,7 +630,7 @@ for (province in unique_provinces) {
 colors <- brewer.pal(11, "Paired")
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,130), ylim = c(0,2000))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,130), ylim = c(0,1800))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
@@ -694,277 +695,6 @@ for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
 legend(x = 400, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
-
-
-
-########################
-###### PCA ########
-########################
-
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
-
-raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-                                   year = combined_df_merged$year, 
-                                   province = combined_df_merged$province,
-                                   region = combined_df_merged$region,
-                                   locus = combined_df_merged$locus,
-                                   n.alleles = combined_df_merged$n.alleles,
-                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
-                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
-                                   run_id = combined_df_merged$run_id))
-
-# Melt the data frame to convert it from wide to long format
-melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
-melted<-melted[,-3]
-
-library(tidyr)
-
-rearranged <- melted %>%
-  pivot_wider(
-    names_from = value,
-    values_from = norm.reads.locus
-  )
-
-# format
-rearranged <- as.data.frame(rearranged)
-rownames(rearranged) <- rearranged$NIDA2
-rearranged <- rearranged[, -1]
-rearranged <- replace(rearranged, is.na(rearranged), 0)
-
-#pca labels:
-NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
-pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region)
-
-if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
-  print("Order of categorical variables is ok.")
-}else{
-  "grab a coffee."
-}
-
-# format freq df
-rearranged <- rearranged %>%
-  mutate_all(as.numeric)
-
-zero_cols <- sapply(rearranged, function(x) all(x == 0))
-rearranged_filtered <- rearranged[, !zero_cols]
-
-# Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
-rearranged_pres_abs <- rearranged %>%
-    mutate_all(~ ifelse(. > 0, 1, .))
-
-rearranged_pres_abs <- rearranged_pres_abs %>%
-  mutate_all(as.numeric)
- 
-
-#PCA
-
-# Perform PCA
-pca_result <- prcomp(rearranged, scale. = F)
-
-# Extract the principal component scores
-pcs <- as.data.frame(pca_result$x)
-
-# Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# Calculate percentage variance explained by each principal component
-pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
-
-# Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-# Perform PCA prsence/absence
-pca_result <- prcomp(rearranged_pres_abs, scale. = F)
-
-# Extract the principal component scores
-pcs <- as.data.frame(pca_result$x)
-
-# Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# Calculate percentage variance explained by each principal component
-pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
-
-# Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-#PCoA
-pcoa_result <- cmdscale(dist(rearranged), k = 2, eig = TRUE)
-
-# Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$points)
-
-# Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
-
-ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-#PCoA presence/absence
-pcoa_result <- cmdscale(dist(rearranged_pres_abs), k = 2, eig = TRUE)
-
-# Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$points)
-
-# Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
-
-ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-#TSNE
-set.seed(69)
-perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
-set.seed(69)
-tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
-
-# Convert t-SNE results to data frame
-tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region)
-tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
-tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region)
-
-# Order factors
-tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
-tsne_data_freqs$region <- factor(tsne_data_freqs$region, levels = regions)
-tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = provinces)
-tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
-
-# Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "t-SNE of Genetic Content (allele frequency)",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
-
-# Plot t-SNE of presence/absence
-ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
-
-
-#######################################################
-# 7.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
-#######################################################
-
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
-
-library(dcifer)
-pardef <- par(no.readonly = TRUE)
-
-## 2022 samples ##
-#format data
-dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
-str(dsmp, list.len = 2)
-
-# format metadata
-meta <- unique(combined_df_merged[c("NIDA2", "region", "province")])
-meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
-
-#estimate naive coi
-lrank <- 2
-coi   <- getCOI(dsmp, lrank = lrank)
-min(coi)
-
-#estimate allele freqs
-afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
-str(afreq, list.len = 2)
-
-#order provinces from north to wouth
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-nsite     <- table(meta$province)[provinces]
-ord       <- order(factor(meta$province, levels = provinces))
-dsmp <- dsmp[ord]
-coi  <- coi[ ord]
-
-#calculate ibd
-dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
-                     alpha = 0.05, nr = 1e3)  
-
-saveRDS(dres0_2022, "dres0_2022.RDS")
-# dres0_2022 <- readRDS("dres0_2022.RDS")
-
-pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
-
-layout(matrix(1:2, 1), width = c(15, 1))
-par(mar = c(1, 1, 2, 1))
-alpha <- 0.05         
-nsmp  <- length(dsmp)
-atsep <- cumsum(nsite)[-length(nsite)]
-isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
-dmat  <- dres0_2022[, , "estimate"]
-dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
-
-plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
-
-abline(v = atsep, h = atsep, col = "gray45", lty = 5)
-atclin <- cumsum(nsite) - nsite/2
-mtext(provinces, side = 3, at = atclin, line = 0.2)
-mtext(provinces, side = 2, at = atclin, line = 0.2)
-
-par(mar = c(1, 0, 2, 3))
-plotColorbar()
-
-dev.off()
-
-#######################################################
-# 8.- Fst: Genetic differentiation (Fst) between provinces and regions
-#######################################################
-
-
 
 #######################################################
 # 9.- calculate He for each population (per year per region/province)
@@ -1242,6 +972,326 @@ ggplot(combined_data_region, aes(x = He_region)) +
        y = "Frequency") +
   facet_wrap(~ region) +
   theme_minimal()
+
+
+########################
+###### PCA ########
+########################
+
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+
+#input for multivariate analyses
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                                   year = combined_df_merged$year, 
+                                   province = combined_df_merged$province,
+                                   region = combined_df_merged$region,
+                                   locus = combined_df_merged$locus,
+                                   n.alleles = combined_df_merged$n.alleles,
+                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
+                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
+                                   run_id = combined_df_merged$run_id))
+
+# ## PICK LOCI WITH HIGHER He for multivariate analyses::: MAKES WORSE PLOTS
+# 
+# # 1) calculate heterozygosity of the population (He); pop = province, region
+# #import everything into lists
+# rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
+# rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+# 
+# 
+# # Load each RDS file into the list with the file name as the list name
+# He_results_list <- list()
+# 
+# for (file in rds_files) {
+#   print(file)
+#   file_name <- tools::file_path_sans_ext(basename(file))
+#   He_results_list[[file_name]] <- readRDS(file)
+# }
+# 
+# # Loop through each element in He_results_list
+# processed_He_results <- data.frame()
+# 
+# for (i in seq_along(He_results_list)) {
+#   
+#   # Summarize He
+#   He_results <- moire::summarize_he(He_results_list[[i]])
+#   He_results$population <- names(He_results_list[i])
+#   
+#   # Add the processed He results to the list
+#   processed_He_results <- rbind(processed_He_results, He_results)
+# }
+# 
+# #formatting categories
+# processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
+# 
+# library(stringr)
+# processed_He_results <- processed_He_results %>%
+#   mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
+#          year = substr(population, nchar(population) - 3, nchar(population)))
+# 
+# processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
+# processed_He_results$year <- as.numeric(processed_He_results$year)
+# 
+# ## pick and sort loci by He
+# loci_He <- processed_He_results %>% 
+#   group_by(locus) %>%
+#   summarize(mean_He = mean(post_stat_mean))%>%
+#   arrange(desc(mean_He))
+# 
+# #keep loci He > 0.7 
+# loci_to_keep_He <- loci_He[loci_He$mean_He >= 0.0,]$locus
+# raref_input <- raref_input[raref_input$locus %in% loci_to_keep_He, ]
+
+
+# Melt the data frame to convert it from wide to long format
+melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
+melted<-melted[,-3]
+
+library(tidyr)
+
+rearranged <- melted %>%
+  pivot_wider(
+    names_from = value,
+    values_from = norm.reads.locus
+  )
+
+# format
+rearranged <- as.data.frame(rearranged)
+rownames(rearranged) <- rearranged$NIDA2
+rearranged <- rearranged[, -1]
+rearranged <- replace(rearranged, is.na(rearranged), 0)
+
+#pca labels:
+NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
+pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region)
+
+if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
+  print("Order of categorical variables is ok.")
+}else{
+  "grab a coffee."
+}
+
+# format freq df
+rearranged <- rearranged %>%
+  mutate_all(as.numeric)
+
+zero_cols <- sapply(rearranged, function(x) all(x == 0))
+rearranged_filtered <- rearranged[, !zero_cols]
+
+# Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
+rearranged_pres_abs <- rearranged %>%
+    mutate_all(~ ifelse(. > 0, 1, .))
+
+rearranged_pres_abs <- rearranged_pres_abs %>%
+  mutate_all(as.numeric)
+ 
+
+#PCA
+pca_result <- prcomp(rearranged, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+# Perform PCA prsence/absence
+pca_result <- prcomp(rearranged_pres_abs, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+#PCoA
+pcoa_result <- cmdscale(dist(rearranged), k = 2, eig = TRUE)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$points)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+
+ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+#PCoA presence/absence
+pcoa_result <- cmdscale(dist(rearranged_pres_abs), k = 2, eig = TRUE)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$points)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+pc_variance <- pcoa_result$eig / sum(pcoa_result$eig) * 100
+
+ggplot(pcs_with_labels, aes(x = V1, y = V2, color = factor(province), shape = factor(region))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "",
+       x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+
+#TSNE
+set.seed(69)
+perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
+set.seed(69)
+tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
+
+# Convert t-SNE results to data frame
+tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
+tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region)
+tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region)
+
+# Order factors
+tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
+tsne_data_freqs$region <- factor(tsne_data_freqs$region, levels = regions)
+tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = provinces)
+tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
+
+# Plot t-SNE of freqs
+ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "t-SNE of Genetic Content (allele frequency)",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
+
+# Plot t-SNE of presence/absence
+ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
+
+
+#######################################################
+# 7.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
+#######################################################
+
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+
+library(dcifer)
+pardef <- par(no.readonly = TRUE)
+
+## 2022 samples ##
+#format data
+dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+str(dsmp, list.len = 2)
+
+# format metadata
+meta <- unique(combined_df_merged[c("NIDA2", "region", "province")])
+meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
+
+#estimate naive coi
+lrank <- 2
+coi   <- getCOI(dsmp, lrank = lrank)
+min(coi)
+
+#estimate allele freqs
+afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
+str(afreq, list.len = 2)
+
+#order provinces from north to wouth
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+nsite     <- table(meta$province)[provinces]
+ord       <- order(factor(meta$province, levels = provinces))
+dsmp <- dsmp[ord]
+coi  <- coi[ ord]
+
+#calculate ibd
+dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
+                     alpha = 0.05, nr = 1e3)  
+
+saveRDS(dres0_2022, "dres0_2022.RDS")
+# dres0_2022 <- readRDS("dres0_2022.RDS")
+
+pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
+
+layout(matrix(1:2, 1), width = c(15, 1))
+par(mar = c(1, 1, 2, 1))
+alpha <- 0.05         
+nsmp  <- length(dsmp)
+atsep <- cumsum(nsite)[-length(nsite)]
+isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
+dmat  <- dres0_2022[, , "estimate"]
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
+
+plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
+
+abline(v = atsep, h = atsep, col = "gray45", lty = 5)
+atclin <- cumsum(nsite) - nsite/2
+mtext(provinces, side = 3, at = atclin, line = 0.2)
+mtext(provinces, side = 2, at = atclin, line = 0.2)
+
+par(mar = c(1, 0, 2, 3))
+plotColorbar()
+
+dev.off()
+
+#######################################################
+# 8.- Fst: Genetic differentiation (Fst) between provinces and regions
+#######################################################
+
 
 
 ##############################
