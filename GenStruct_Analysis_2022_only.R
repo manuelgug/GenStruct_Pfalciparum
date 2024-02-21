@@ -934,7 +934,7 @@ coi  <- coi[ ord]
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                      alpha = 0.05, nr = 1e3)  
 
-# saveRDS(dres0_2022, "dres0_2022.RDS")
+saveRDS(dres0_2022, "dres0_2022.RDS")
 # dres0_2022 <- readRDS("dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
@@ -1315,13 +1315,15 @@ region_columns <- grepl("Centre|North|South", rownames(rearranged_processed_alle
 rearranged_processed_allele_freq_results_region <- rearranged_processed_allele_freq_results[region_columns, ]
 rearranged_processed_allele_freq_results_province <- rearranged_processed_allele_freq_results[!region_columns, ]
 
-# Split row names by "_"
-metadata_province <- str_split_fixed(rownames(rearranged_processed_allele_freq_results_province), "_", 2)
-metadata_region <- str_split_fixed(rownames(rearranged_processed_allele_freq_results_region), "_", 2)
+library(stringr)
+# Split row names by the last "_"
+metadata_province <- str_split(rownames(rearranged_processed_allele_freq_results_province), "_([^_]*)$", simplify = TRUE)
+metadata_region <- str_split(rownames(rearranged_processed_allele_freq_results_region), "_([^_]*)$", simplify = TRUE)
+
 
 # Create a data frame with two columns named site and year
-metadata_province <- data.frame(site = metadata_province[, 1], year = metadata_province[, 2], row.names = NULL)
-metadata_region <- data.frame(site = metadata_region[, 1], year = metadata_region[, 2], row.names = NULL)
+metadata_province <- data.frame(site = metadata_province[, 1], row.names = NULL)
+metadata_region <- data.frame(site = metadata_region[, 1], row.names = NULL)
 
 
 # tsne of provinces
