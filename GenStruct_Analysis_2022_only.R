@@ -186,12 +186,12 @@ merged_df_dups <- merged_df_dups[rowSums(is.na(merged_df_dups)) < length(colname
 # Exclude the first column and find the column with the maximum value for each row
 merged_df_dups$BEST_RUN <- colnames(merged_df_dups)[apply(merged_df_dups[-1], 1, which.max) + 1]
 
-#did i found all replicates?
-if (all(repeated_nidas_df$NIDA2 %in% merged_df_dups$sample_id)) {
-  print("You found all replicates. Proceed with removal")
-}else{
-  "grab a coffee"
-}
+# #did i found all replicates?
+# if (all(repeated_nidas_df$NIDA2 %in% merged_df_dups$sample_id)) {
+#   print("You found all replicates. Proceed with removal")
+# }else{
+#   "grab a coffee"
+# }
 
 #remove replicates, keep the best
 for (i in 1:nrow(merged_df_dups)) {
@@ -373,10 +373,15 @@ combined_df_merged$province <- ifelse(
 )
 
 
-# JUST IN CASE... recalculate n.alleles for each locus of each sample
+# # JUST IN CASE... recalculate n.alleles for each locus of each sample
+# combined_df_merged <- combined_df_merged %>%
+#     group_by(NIDA2, locus) %>%
+#     mutate(n.alleles = n_distinct(pseudo_cigar))
+
+#recount n.alleles after filtering
 combined_df_merged <- combined_df_merged %>%
-    group_by(NIDA2, locus) %>%
-    mutate(n.alleles = n_distinct(pseudo_cigar))
+  group_by(NIDA2, locus) %>%
+  mutate(n.alleles = n_distinct(pseudo_cigar))
 
 combined_df_merged <- as.data.frame(combined_df_merged)
 
@@ -435,13 +440,13 @@ mcmc_results <- moire::run_mcmc(
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
   thin = 10)
 
-saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only.RDS")
+saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("TEST_all_samples_complete_filtered_MOIRE-RESULTS_2022_only.RDS") # change name to final file, THIS IS TEST!!
+mcmc_results <- readRDS("TEST_all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS") # change name to final file, THIS IS TEST!!
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
@@ -473,8 +478,10 @@ coi_results$province <- ifelse(
 #coi_results <- coi_results[coi_results$year == 2022,]  #TEMPORAL FIX UNTIL MOIRE DATA FOR 2022 ONLY COMES OOUT
 
 
-# % polyclonal infections on each province and region per year
-polyclonal_percentage_region <- coi_results %>%
+coi_results_region <- coi_results[!(coi_results$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
+
+# % polyclonal infections on each province and region
+polyclonal_percentage_region <- coi_results_region %>%
   group_by(region) %>%
   summarise(polyclonal_percentage_region = mean(polyclonal_from_ecoi_med == "polyclonal") * 100) %>%
   ungroup()
@@ -490,7 +497,7 @@ provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_
 regions <- c("North", "Centre", "South")
 
 coi_results$province <- factor(coi_results$province, levels = provinces)
-coi_results$region <- factor(coi_results$region, levels = regions)
+coi_results_region$region <- factor(coi_results_region$region, levels = regions)
 polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
 polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
 
@@ -505,8 +512,10 @@ a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   guides(fill = FALSE) 
 
 a
+#ggsave("naive_coi_provinces_ditros.png", a, width = 14, height = 6, bg = "white")
 
-b <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
+
+b <- ggplot(coi_results_region, aes(x = naive_coi, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_grid( ~ region, scales = "free") +
   labs(title = "",
@@ -514,7 +523,7 @@ b <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
        y = "Frequency",
        fill = "Region") +
   theme_minimal() +
-  guides(fill = FALSE) 
+  guides(fill = FALSE)
 
 b
 
@@ -530,7 +539,7 @@ c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
 
 c
 
-d <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = region)) +
+d <- ggplot(coi_results_region, aes(x = post_effective_coi_med, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_grid( ~ region, scales = "free") +
   labs(title = "",
@@ -561,6 +570,7 @@ f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_per
   theme_minimal()+
   guides(fill = FALSE) 
 f
+#ggsave("perc_polyclonal_provinces.png", f, width = 14, height = 10, bg = "white")
 
 
 ################################### 
@@ -629,14 +639,19 @@ for (province in unique_provinces) {
 # Select 9 colors from the Paired palette
 colors <- brewer.pal(11, "Paired")
 
+#pdf("accumulation_curves_provinces.pdf", width = 12, height = 8)
+
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Province)", xlim = c(0,130), ylim = c(0,1800))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Allele Accumulation Curves per Province", xlim = c(0,130), ylim = c(0,1800))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
-legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.7)
 
+#dev.off()
 #conclusion....
+
+raref_input_region <- raref_input[!(raref_input$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
 
 # REGION
 
@@ -644,7 +659,7 @@ legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.int
 accum_curves_2022 <- list()
 
 # Get unique years and provinces
-unique_provinces <- unique(raref_input$region)
+unique_provinces <- unique(raref_input_region$region)
 
 # Iterate over each region
 for (region in unique_provinces) {
@@ -652,7 +667,7 @@ for (region in unique_provinces) {
   print(region)
   
   # Subsetting the data for 2022
-  sub_2022 <- raref_input[raref_input$year == 2022 & raref_input$region == region, ]
+  sub_2022 <- raref_input_region[raref_input_region$year == 2022 & raref_input_region$region == region, ]
   
   # Check if there are unique NIDA2s for 2022
   if (length(unique(sub_2022$NIDA2)) > 0) {
@@ -690,14 +705,14 @@ for (region in unique_provinces) {
 colors <- brewer.pal(3, "Paired")
 
 # Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,500), ylim = c(0,3000))
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,350), ylim = c(0,2700))
 for (i in 2:length(accum_curves_2022)) {
   lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
 }
-legend(x = 400, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
+legend(x = 310, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 #######################################################
-# 9.- calculate He for each population (per year per region/province)
+# 9.- calculate He for each population (per region/province)
 #######################################################
 
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
@@ -726,7 +741,7 @@ run_moire <- function(df, output_name) {
   )
   
   # checkpoint
-  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS.RDS"))
+  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS"))
 }
 
 # Create a list of data frames and corresponding years
@@ -749,6 +764,8 @@ for (i in seq_along(data_frames)) {
   }
 }
 
+data_frames[[1]] <- data_frames[[1]][!(data_frames[[1]]$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
+
 # Loop over each region
 for (i in seq_along(data_frames)) {
   year <- years[[i]]
@@ -766,8 +783,12 @@ for (i in seq_along(data_frames)) {
 }
 
 #######################################################
-# 10.- He and Fws results
+# 10.- He and Fws results 
 #######################################################
+
+
+### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
+
 
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
@@ -942,31 +963,35 @@ p.val_region_He_2022 <- melt(pairwise_region_He_2022[[3]])
 signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
 
 
-
-
 # Changes in He distributions and means by year
 #provinces
 mean_data <- combined_data_province %>%
   group_by(province) %>%
-  summarize(mean_He = mean(He_province, na.rm = TRUE))
+  summarize(mean_He = mean(He_province, na.rm = TRUE),
+            median_He = median(He_province, na.rm = TRUE))
 
 ggplot(combined_data_province, aes(x = He_province)) +
   geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid") +
+  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
+  geom_vline(data = mean_data, aes(xintercept = median_He), linetype = "solid", color = "orange") +
   labs(title = "Province Heterozygosity",
        x = "He",
        y = "Frequency") +
   facet_wrap(~ province) +
   theme_minimal()
 
+#ggsave("mean_he_province_distros.png", ph, width = 14, height = 10, bg = "white")
+
 #regions
-mean_data <- combined_data_region %>%
+mean_data_region <- combined_data_region %>%
   group_by(region) %>%
-  summarize(mean_He = mean(He_region, na.rm = TRUE))
+  summarize(mean_He = mean(He_region, na.rm = TRUE),
+            median_He = median(He_region, na.rm = TRUE))
 
 ggplot(combined_data_region, aes(x = He_region)) +
   geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid") +
+  geom_vline(data = mean_data_region, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
+  geom_vline(data = mean_data_region, aes(xintercept = median_He), linetype = "solid", color = "orange") +
   labs(title = "Region Heterozygosity",
        x = "He",
        y = "Frequency") +
@@ -1173,6 +1198,7 @@ ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = re
   #      y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
   theme_minimal()
 
+#ggsave("pcoa_sample_freqs.png", pc, width = 12, height = 10, bg = "white")
 
 #PCoA presence/absence
 
@@ -1225,11 +1251,13 @@ tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = prov
 tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
+ts <- ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
+
+#ggsave("tsne_sample_freqs.png", ts, width = 12, height = 10, bg = "white")
 
 # Plot t-SNE of presence/absence
 ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
@@ -1390,6 +1418,12 @@ metadata_region <- str_split(rownames(rearranged_processed_allele_freq_results_r
 metadata_province <- data.frame(site = metadata_province[, 1], row.names = NULL)
 metadata_region <- data.frame(site = metadata_region[, 1], row.names = NULL)
 
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+metadata_province$site <- factor(metadata_province$site, levels = provinces)
+metadata_region$site <- factor(metadata_region$site, levels = regions)
+
 
 # tsne of provinces
 perplexity <- floor((nrow(metadata_province) - 1) / 3) #highest possible
@@ -1401,7 +1435,7 @@ tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
 
 # Plot t-SNE of freqs
 ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) + # shape = factor(metadata_province$site)
-  geom_point(size = 4, alpha = 0.7) +
+  geom_point(size = 10, alpha = 0.7) +
   labs(title = "t-SNE of Allele Frequencies",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()
@@ -1418,7 +1452,12 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) +
 #######################################3
 # 11.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+
+#combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+
+
+### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
+
 
 # pairwise FST comparion = 1 - Hs/HT.... Hs: heterozygosity of each loci per population; HT: average heterozygosity between pop1 and 2 for each loci. heatmap AND distributions (mean tests also)
 
@@ -1495,6 +1534,9 @@ sample_size_regions
 # 1.- calculate Hs and Ht for each locus
 # 2.- calculate Fst [(Ht - Hs) / Ht] resampling loci to get confidence intervals (95%; 2.5 and 97.5 percentiles)
 # 3.- plot mean genome-wide Fst with mean confidence intervals
+
+# Ideas: use only loci with highest He to make the CI lower?
+
 
 #1) FOR REGIONS
 fts_input_regions <- merge(processed_He_results_regions[c("locus", "post_stat_mean", "pop")], sample_size_regions[c("unique_NIDA2_count", "pop")], by = c("pop"))
@@ -1637,7 +1679,10 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
   labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal()+
   coord_flip()  # Flip the coordinates to make the plot horizontal
+
+#ggsave("fst_CI_provinces.png", fstci, width = 12, height = 10, bg = "white")
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
@@ -1662,7 +1707,6 @@ mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = regions)
 
 heatmap_2022_regions <- create_heatmap(mean_FST_df)
 print(heatmap_2022_regions)
-
 
 
 #2) FOR PROVINCES
@@ -1806,6 +1850,7 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
   labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal()+
   coord_flip()  # Flip the coordinates to make the plot horizontal
 
 # Create heatmap for provinces comparisons
@@ -1831,6 +1876,10 @@ mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = provinces)
 
 heatmap_2022_provinces <- create_heatmap(mean_FST_df)
 print(heatmap_2022_provinces)
+
+#ggsave("heatmap_fst_provinces.png", heatmap_2022_regions, width = 12, height = 10, bg = "white")
+
+
 
 #SLIGHTLY DIFFERENT CALCULATION, NO CONFIDENCE INTERVALS. KEEPING IT JUST IN CASE...
 
