@@ -1586,6 +1586,42 @@ heatmap_regions_2022 <- create_heatmap(genome_wide_fst_results)
 print(heatmap_regions_2022)
 
 
+## Confidence intervals
+
+# Define a function to calculate FST
+calculate_FST <- function(Ht, Hs) {
+  return((Ht - Hs) / Ht)
+}
+
+# Set the number of bootstrap iterations
+n_bootstrap <- 1000
+
+# Create an empty dataframe to store the bootstrap results
+bootstrap_results <- data.frame(matrix(ncol = 4, nrow = n_bootstrap))
+colnames(bootstrap_results) <- c("pop1", "pop2", "lower_ci", "upper_ci")
+
+# Perform bootstrap for each pairwise comparison
+for (i in 1:n_bootstrap) {
+  # Sample with replacement from the genome-wide FST results for each pairwise comparison
+  bootstrap_data <- genome_wide_fst_results[sample(nrow(genome_wide_fst_results), replace = TRUE), ]
+  
+  # Calculate FST for each pairwise comparison in the bootstrap sample
+  bootstrap_data$bootstrap_FST <- (bootstrap_data$Ht - bootstrap_data$Hs) / bootstrap_data$Ht
+  
+  # Calculate confidence intervals for each pairwise comparison
+  bootstrap_ci <- quantile(bootstrap_data$bootstrap_FST, c(0.025, 0.975))
+  
+  # Store the results in the bootstrap results dataframe
+  bootstrap_results[i, "pop1"] <- bootstrap_data$pop1[1]
+  bootstrap_results[i, "pop2"] <- bootstrap_data$pop2[1]
+  bootstrap_results[i, "lower_ci"] <- bootstrap_ci[1]
+  bootstrap_results[i, "upper_ci"] <- bootstrap_ci[2]
+}
+
+# Print the bootstrap results
+print(bootstrap_results)
+
+
 #2) FOR PROVINCES
 fts_input_provinces <- merge(processed_He_results_provinces[c("locus", "post_stat_mean", "pop")], sample_size_provinces[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
@@ -1687,6 +1723,40 @@ heatmap_2022_provinces <- create_heatmap(genome_wide_fst_results)
 print(heatmap_2022_provinces)
 
 
+## Confidence intervals
+
+# Define a function to calculate FST
+calculate_FST <- function(Ht, Hs) {
+  return((Ht - Hs) / Ht)
+}
+
+# Set the number of bootstrap iterations
+n_bootstrap <- 1000
+
+# Create an empty dataframe to store the bootstrap results
+bootstrap_results <- data.frame(matrix(ncol = 4, nrow = n_bootstrap))
+colnames(bootstrap_results) <- c("pop1", "pop2", "lower_ci", "upper_ci")
+
+# Perform bootstrap for each pairwise comparison
+for (i in 1:n_bootstrap) {
+  # Sample with replacement from the genome-wide FST results for each pairwise comparison
+  bootstrap_data <- genome_wide_fst_results[sample(nrow(genome_wide_fst_results), replace = TRUE), ]
+  
+  # Calculate FST for each pairwise comparison in the bootstrap sample
+  bootstrap_data$bootstrap_FST <- (bootstrap_data$Ht - bootstrap_data$Hs) / bootstrap_data$Ht
+  
+  # Calculate confidence intervals for each pairwise comparison
+  bootstrap_ci <- quantile(bootstrap_data$bootstrap_FST, c(0.025, 0.975))
+  
+  # Store the results in the bootstrap results dataframe
+  bootstrap_results[i, "pop1"] <- bootstrap_data$pop1[1]
+  bootstrap_results[i, "pop2"] <- bootstrap_data$pop2[1]
+  bootstrap_results[i, "lower_ci"] <- bootstrap_ci[1]
+  bootstrap_results[i, "upper_ci"] <- bootstrap_ci[2]
+}
+
+# Print the bootstrap results
+print(bootstrap_results)
 
 
 
