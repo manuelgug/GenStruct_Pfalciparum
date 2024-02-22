@@ -1492,6 +1492,10 @@ sample_size_regions
 # Hs = Hs1 + Hs2 / 2 [Hs1 and Hs2 are post_stat_mean (heterozygosity for each locus) calculated by moire for each pop]. calculated genome-wide average, just avergaae Hs1 and Hs2 of all loci
 # THIS IS DONE FOR EACH LOCUS
 
+# 1.- calculate Hs and Ht for each locus
+# 2.- calculate Fst [(Ht - Hs) / Ht] resampling loci to get confidence intervals (95%; 2.5 and 97.5 percentiles)
+# 3.- plot mean genome-wide Fst with mean confidence intervals
+
 #1) FOR REGIONS
 fts_input_regions <- merge(processed_He_results_regions[c("locus", "post_stat_mean", "pop")], sample_size_regions[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
