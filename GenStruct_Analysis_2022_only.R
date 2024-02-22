@@ -1489,11 +1489,10 @@ sample_size_regions
 # CALCULATE pairwise Fst ## STILL NOT COMPLETELY SURE ABOUT THIS, BUT HEY...
 # Fst = (Ht - Hs) / Ht [same as 1 - Hs / Ht]*;
 # Ht is (n1*Hs1 + n2*Hs2) / n1+n2 [n is individuals of each pop]; 
-# Hs = Hs1 + Hs2 / 2 [Hs1 and Hs2 are post_stat_mean (heterozygosity for each locus) calculated by moire for each pop].
+# Hs = Hs1 + Hs2 / 2 [Hs1 and Hs2 are post_stat_mean (heterozygosity for each locus) calculated by moire for each pop]. calculated genome-wide average, just avergaae Hs1 and Hs2 of all loci
 # THIS IS DONE FOR EACH LOCUS
 
 #1) FOR REGIONS
-
 fts_input_regions <- merge(processed_He_results_regions[c("locus", "post_stat_mean", "pop")], sample_size_regions[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
 # Generate all possible combinations of unique values
@@ -1537,43 +1536,57 @@ if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_regions$l
   print("grab a coffee.")
 }
 
-#calculate Hs for populations
-fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
-fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
+
+fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
+
+
+#genome-wide average for Hs1 and Hs2 for each pop
+genome_wide_fst_results <- fst_results_df %>% 
+  group_by(pop1, pop2) %>%
+  summarize(genome_wide_avg_Hs1 = mean(Hs1),
+            genome_wide_avg_Hs2 = mean(Hs2),
+            n1 = unique(n1),
+            n2 = unique(n2))
+
+#calculate Hs for populations PER LOCUS
+genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
+genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
 
 #Calculate Ht (uses sample sizes for each pop)
-fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
-fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
+genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
+genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
 
 #calcualte Fst
-fst_results_df$Fst <- (fst_results_df$Ht -fst_results_df$Hs)/fst_results_df$Ht #the same as 1- (fst_results_df$Hs/fst_results_df$Ht)
-
-fst_results_df<- fst_results_df[!is.na(fst_results_df$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
-
-mean_Fst <- fst_results_df %>%
-  group_by(pop1, pop2) %>%
-  summarize(mean_Fst = mean(Fst))
+genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
+#genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
 # Function to create heatmap
 create_heatmap <- function(data, title) {
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
+  ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
     geom_tile() +
     geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
     theme_minimal()
 }
 
-# Filter data for 2022 comparisons
-mean_Fst_2022 <- mean_Fst %>%
-  filter(grepl("2022", pop1) & grepl("2022", pop2))
+# Create heatmap for regions 
 
-# Create heatmap for 2022 comparisons
-heatmap_2022 <- create_heatmap(mean_Fst_2022)
-print(heatmap_2022)
+regions <- c("North", "Centre", "South")
+regions <- rev(regions)
+
+# Remove "_2022" from population names and reorder according to the specified order
+genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
+genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
+
+# Reorder pop1 and pop2 columns based on regions order
+genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = regions)
+genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = regions)
+
+heatmap_regions_2022 <- create_heatmap(genome_wide_fst_results)
+print(heatmap_regions_2022)
 
 
 #2) FOR PROVINCES
-
 fts_input_provinces <- merge(processed_He_results_provinces[c("locus", "post_stat_mean", "pop")], sample_size_provinces[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
 # Generate all possible combinations of unique values
@@ -1581,8 +1594,8 @@ unique_pops <- unique(fts_input_provinces$pop)
 combinations <- expand.grid(pop1 = unique_pops, pop2 = unique_pops)
 
 # Create an empty dataframe to store the results
-fst_results_df_procinves <- data.frame(matrix(ncol = 7, nrow = 1))
-colnames(fst_results_df_procinves) <- c("pop1", "pop2", "Hs1", "Hs2", "n1", "n2", "locus")
+fst_results_df <- data.frame(matrix(ncol = 7, nrow = 1))
+colnames(fst_results_df) <- c("pop1", "pop2", "Hs1", "Hs2", "n1", "n2", "locus")
 
 # Loop through each locus
 for (locus in unique(fts_input_provinces$locus)) {
@@ -1599,55 +1612,80 @@ for (locus in unique(fts_input_provinces$locus)) {
     Hs2 <- locus_subset[locus_subset$pop == pop2, ]$post_stat_mean
     n2 <- locus_subset[locus_subset$pop == pop2, ]$unique_NIDA2_count
     
-    row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
-    fst_results_df_procinves <- rbind(fst_results_df_procinves, row)
+    # Check if both populations have data for this locus
+    if (length(Hs1) > 0 && length(Hs2) > 0) {
+      row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
+    } else {
+      # If one population does not have data, assign NA to the corresponding entry
+      row <- c(pop1, pop2, NA, NA, NA, NA, locus)
+    }
+    
+    fst_results_df <- rbind(fst_results_df, row)
   }
 }
 
 #formating
-fst_results_df_procinves <- fst_results_df_procinves[-1,]
-fst_results_df_procinves$Hs1 <- round(as.numeric(fst_results_df_procinves$Hs1), 3)
-fst_results_df_procinves$Hs2 <- round(as.numeric(fst_results_df_procinves$Hs2),3)
-fst_results_df_procinves$n1 <- round(as.numeric(fst_results_df_procinves$n1),3)
-fst_results_df_procinves$n2 <- round(as.numeric(fst_results_df_procinves$n2),3)
+fst_results_df <- fst_results_df[-1,]
+fst_results_df$Hs1 <- round(as.numeric(fst_results_df$Hs1), 3)
+fst_results_df$Hs2 <- round(as.numeric(fst_results_df$Hs2),3)
+fst_results_df$n1 <- round(as.numeric(fst_results_df$n1),3)
+fst_results_df$n2 <- round(as.numeric(fst_results_df$n2),3)
 
-if (nrow(fst_results_df_procinves) == nrow(combinations)*length(unique(fts_input_provinces$locus))){
+if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_provinces$locus))){
   print("Got all expected combinations for per locus pairwise Fst calculations")
 }else{
   print("grab a coffee.")
 }
 
-#calculate Hs for populations
-fst_results_df_procinves$Hs <- (fst_results_df_procinves$Hs1 + fst_results_df_procinves$Hs2) / 2
-fst_results_df_procinves$Hs <- round(as.numeric(fst_results_df_procinves$Hs),3)
+
+fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
+
+
+#genome-wide average for Hs1 and Hs2 for each pop
+genome_wide_fst_results <- fst_results_df %>% 
+  group_by(pop1, pop2) %>%
+  summarize(genome_wide_avg_Hs1 = mean(Hs1),
+            genome_wide_avg_Hs2 = mean(Hs2),
+            n1 = unique(n1),
+            n2 = unique(n2))
+
+#calculate Hs for populations PER LOCUS
+genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
+genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
 
 #Calculate Ht (uses sample sizes for each pop)
-fst_results_df_procinves$Ht <- ((fst_results_df_procinves$n1 * fst_results_df_procinves$Hs1)+ (fst_results_df_procinves$n2 * fst_results_df_procinves$Hs2))/(fst_results_df_procinves$n1 + fst_results_df_procinves$n2)
-fst_results_df_procinves$Ht <- round(as.numeric(fst_results_df_procinves$Ht),3)
+genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
+genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
 
 #calcualte Fst
-fst_results_df_procinves$Fst <- (fst_results_df_procinves$Ht -fst_results_df_procinves$Hs)/fst_results_df_procinves$Ht #the same as 1- (fst_results_df_procinves$Hs/fst_results_df_procinves$Ht)
-
-fst_results_df_procinves<- fst_results_df_procinves[!is.na(fst_results_df_procinves$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
-
-mean_Fst <- fst_results_df_procinves %>%
-  group_by(pop1, pop2) %>%
-  summarize(mean_Fst = mean(Fst))
+genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
+genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
 # Function to create heatmap
 create_heatmap <- function(data, title) {
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_Fst, label = round(mean_Fst, 3))) +
+  ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
     geom_tile() +
     geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_Fst), max(data$mean_Fst))) +  # Adjust scale limits
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
     theme_minimal()
 }
 
-# Create heatmap for 2022 comparisons
-heatmap_2022 <- create_heatmap(mean_Fst, "")
+# Create heatmap for provinces comparisons
 
-# Display the heatmaps
-print(heatmap_2022)
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- rev(provinces)
+
+# Remove "_2022" from population names and reorder according to the specified order
+genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
+genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
+
+# Reorder pop1 and pop2 columns based on provinces order
+genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = provinces)
+genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = provinces)
+
+heatmap_2022_provinces <- create_heatmap(genome_wide_fst_results)
+print(heatmap_2022_provinces)
+
 
 
 
