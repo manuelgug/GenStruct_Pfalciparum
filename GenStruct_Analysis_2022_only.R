@@ -1518,7 +1518,14 @@ for (locus in unique(fts_input_regions$locus)) {
     Hs2 <- locus_subset[locus_subset$pop == pop2, ]$post_stat_mean
     n2 <- locus_subset[locus_subset$pop == pop2, ]$unique_NIDA2_count
     
-    row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
+    # Check if both populations have data for this locus
+    if (length(Hs1) > 0 && length(Hs2) > 0) {
+      row <- c(pop1, pop2, Hs1, Hs2, n1, n2, locus)
+    } else {
+      # If one population does not have data, assign NA to the corresponding entry
+      row <- c(pop1, pop2, NA, NA, NA, NA, locus)
+    }
+    
     fst_results_df <- rbind(fst_results_df, row)
   }
 }
@@ -1540,86 +1547,118 @@ if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_regions$l
 fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
 
 
-#genome-wide average for Hs1 and Hs2 for each pop
-genome_wide_fst_results <- fst_results_df %>% 
-  group_by(pop1, pop2) %>%
-  summarize(genome_wide_avg_Hs1 = mean(Hs1),
-            genome_wide_avg_Hs2 = mean(Hs2),
-            n1 = unique(n1),
-            n2 = unique(n2))
-
 #calculate Hs for populations PER LOCUS
-genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
-genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
+fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
+fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
 
 #Calculate Ht (uses sample sizes for each pop)
-genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
-genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
-
-#calcualte Fst
-genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
-#genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
-
-# Function to create heatmap
-create_heatmap <- function(data, title) {
-  ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
-    geom_tile() +
-    geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
-    theme_minimal()
-}
-
-# Create heatmap for regions 
-
-regions <- c("North", "Centre", "South")
-regions <- rev(regions)
-
-# Remove "_2022" from population names and reorder according to the specified order
-genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
-genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
-
-# Reorder pop1 and pop2 columns based on regions order
-genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = regions)
-genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = regions)
-
-heatmap_regions_2022 <- create_heatmap(genome_wide_fst_results)
-print(heatmap_regions_2022)
+fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
+fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 
 
-## Confidence intervals
+library(boot)
 
 # Define a function to calculate FST
-calculate_FST <- function(Ht, Hs) {
-  return((Ht - Hs) / Ht)
+calculate_FST <- function(data, indices) {
+  sampled_data <- data[indices, ]
+  
+  # Extract pre-calculated Hs and Ht values
+  Hs <- sampled_data$Hs
+  Ht <- sampled_data$Ht
+  
+  # Calculate FST
+  FST <- ((Ht - Hs) / Ht)
+  
+  return(FST)
 }
 
-# Set the number of bootstrap iterations
-n_bootstrap <- 1000
+# Create a list to store bootstrap results
+bootstrap_results <- list()
 
-# Create an empty dataframe to store the bootstrap results
-bootstrap_results <- data.frame(matrix(ncol = 4, nrow = n_bootstrap))
-colnames(bootstrap_results) <- c("pop1", "pop2", "lower_ci", "upper_ci")
-
-# Perform bootstrap for each pairwise comparison
-for (i in 1:n_bootstrap) {
-  # Sample with replacement from the genome-wide FST results for each pairwise comparison
-  bootstrap_data <- genome_wide_fst_results[sample(nrow(genome_wide_fst_results), replace = TRUE), ]
+# Loop through each pairwise comparison
+for (i in 1:nrow(combinations)) {
+  pop1 <- as.character(combinations$pop1[i])
+  pop2 <- as.character(combinations$pop2[i])
   
-  # Calculate FST for each pairwise comparison in the bootstrap sample
-  bootstrap_data$bootstrap_FST <- (bootstrap_data$Ht - bootstrap_data$Hs) / bootstrap_data$Ht
+  # Subset data for the current pairwise comparison
+  pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
   
-  # Calculate confidence intervals for each pairwise comparison
-  bootstrap_ci <- quantile(bootstrap_data$bootstrap_FST, c(0.025, 0.975))
+  # Define a unique name for the pairwise comparison
+  comparison_name <- paste(pop1, pop2, sep = "_vs_")
   
-  # Store the results in the bootstrap results dataframe
-  bootstrap_results[i, "pop1"] <- bootstrap_data$pop1[1]
-  bootstrap_results[i, "pop2"] <- bootstrap_data$pop2[1]
-  bootstrap_results[i, "lower_ci"] <- bootstrap_ci[1]
-  bootstrap_results[i, "upper_ci"] <- bootstrap_ci[2]
+  # Perform bootstrap resampling
+  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 1000)
 }
 
-# Print the bootstrap results
-print(bootstrap_results)
+
+# Calculate the mean of bootstrap replicates for each pairwise comparison
+mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+
+# Create a function to extract confidence intervals for the mean
+get_mean_confidence_intervals <- function(bootstrap_result) {
+  ci <- boot.ci(bootstrap_result, type = "perc")
+  lower_limit <- ci$percent[4]
+  upper_limit <- ci$percent[5]
+  return(c(lower_limit, upper_limit))
+}
+
+# Extract confidence intervals for the mean of FST
+mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+
+# Create a data frame to store the results
+mean_FST_df <- data.frame(
+  pairwise_comparisons = names(mean_FST),
+  mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
+  lower_limit = sapply(mean_confidence_intervals, `[`, 1),
+  upper_limit = sapply(mean_confidence_intervals, `[`, 2)
+)
+
+# Remove "_2022" from population names and reorder according to the specified order
+mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+
+# Exclude rows with 0 in the last three columns
+mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+
+#exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
+mean_FST_df_filtered<- mean_FST_df_filtered %>%
+  distinct(mean_FST, .keep_all = TRUE)
+
+# Reorder pairwise_comparisons based on mean_FST
+mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
+                                                    levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+
+# Create the boxplot
+ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+  labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()  # Flip the coordinates to make the plot horizontal
+
+# Create heatmap for regions comparisons
+create_heatmap <- function(data, title) {
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
+    geom_tile() +
+    geom_text(color = "black") +
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
+    theme_minimal()+
+    labs(x = "", y = "")
+}
+
+# Split pairwise_comparisons into pop1 and pop2
+library(tidyr)
+mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
+
+# Reorder pop1 and pop2 columns based on regions order
+regions <- c("North", "Centre", "South") #ordered from north to south
+regions <- rev(regions)
+
+mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = regions)
+mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = regions)
+
+heatmap_2022_regions <- create_heatmap(mean_FST_df)
+print(heatmap_2022_regions)
+
 
 
 #2) FOR PROVINCES
@@ -1677,86 +1716,164 @@ if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_provinces
 fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
 
 
-#genome-wide average for Hs1 and Hs2 for each pop
-genome_wide_fst_results <- fst_results_df %>% 
-  group_by(pop1, pop2) %>%
-  summarize(genome_wide_avg_Hs1 = mean(Hs1),
-            genome_wide_avg_Hs2 = mean(Hs2),
-            n1 = unique(n1),
-            n2 = unique(n2))
-
 #calculate Hs for populations PER LOCUS
-genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
-genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
+fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
+fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
 
 #Calculate Ht (uses sample sizes for each pop)
-genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
-genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
+fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
+fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 
-#calcualte Fst
-genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
-genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
 
-# Function to create heatmap
-create_heatmap <- function(data, title) {
-  ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
-    geom_tile() +
-    geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
-    theme_minimal()
+library(boot)
+
+# Define a function to calculate FST
+calculate_FST <- function(data, indices) {
+  sampled_data <- data[indices, ]
+  
+  # Extract pre-calculated Hs and Ht values
+  Hs <- sampled_data$Hs
+  Ht <- sampled_data$Ht
+  
+  # Calculate FST
+  FST <- ((Ht - Hs) / Ht)
+  
+  return(FST)
 }
 
-# Create heatmap for provinces comparisons
+# Create a list to store bootstrap results
+bootstrap_results <- list()
 
+# Loop through each pairwise comparison
+for (i in 1:nrow(combinations)) {
+  pop1 <- as.character(combinations$pop1[i])
+  pop2 <- as.character(combinations$pop2[i])
+  
+  # Subset data for the current pairwise comparison
+  pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
+  
+  # Define a unique name for the pairwise comparison
+  comparison_name <- paste(pop1, pop2, sep = "_vs_")
+  
+  # Perform bootstrap resampling
+  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 1000)
+}
+
+
+# Calculate the mean of bootstrap replicates for each pairwise comparison
+mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+
+# Create a function to extract confidence intervals for the mean
+get_mean_confidence_intervals <- function(bootstrap_result) {
+  ci <- boot.ci(bootstrap_result, type = "perc")
+  lower_limit <- ci$percent[4]
+  upper_limit <- ci$percent[5]
+  return(c(lower_limit, upper_limit))
+}
+
+# Extract confidence intervals for the mean of FST
+mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+
+# Create a data frame to store the results
+mean_FST_df <- data.frame(
+  pairwise_comparisons = names(mean_FST),
+  mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
+  lower_limit = sapply(mean_confidence_intervals, `[`, 1),
+  upper_limit = sapply(mean_confidence_intervals, `[`, 2)
+)
+
+# Remove "_2022" from population names and reorder according to the specified order
+mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+
+# Exclude rows with 0 in the last three columns
+mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+
+#exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
+mean_FST_df_filtered<- mean_FST_df_filtered %>%
+  distinct(mean_FST, .keep_all = TRUE)
+
+# Reorder pairwise_comparisons based on mean_FST
+mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
+                                                    levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+
+# Create the boxplot
+ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+  labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()  # Flip the coordinates to make the plot horizontal
+
+# Create heatmap for provinces comparisons
+create_heatmap <- function(data, title) {
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
+    geom_tile() +
+    geom_text(color = "black") +
+    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
+    theme_minimal()+
+    labs(x = "", y = "")
+}
+
+# Split pairwise_comparisons into pop1 and pop2
+library(tidyr)
+mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
+
+# Reorder pop1 and pop2 columns based on provinces order
 provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 provinces <- rev(provinces)
 
-# Remove "_2022" from population names and reorder according to the specified order
-genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
-genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
+mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = provinces)
+mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = provinces)
 
-# Reorder pop1 and pop2 columns based on provinces order
-genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = provinces)
-genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = provinces)
-
-heatmap_2022_provinces <- create_heatmap(genome_wide_fst_results)
+heatmap_2022_provinces <- create_heatmap(mean_FST_df)
 print(heatmap_2022_provinces)
 
+#SLIGHTLY DIFFERENT CALCULATION, NO CONFIDENCE INTERVALS. KEEPING IT JUST IN CASE...
 
-## Confidence intervals
-
-# Define a function to calculate FST
-calculate_FST <- function(Ht, Hs) {
-  return((Ht - Hs) / Ht)
-}
-
-# Set the number of bootstrap iterations
-n_bootstrap <- 1000
-
-# Create an empty dataframe to store the bootstrap results
-bootstrap_results <- data.frame(matrix(ncol = 4, nrow = n_bootstrap))
-colnames(bootstrap_results) <- c("pop1", "pop2", "lower_ci", "upper_ci")
-
-# Perform bootstrap for each pairwise comparison
-for (i in 1:n_bootstrap) {
-  # Sample with replacement from the genome-wide FST results for each pairwise comparison
-  bootstrap_data <- genome_wide_fst_results[sample(nrow(genome_wide_fst_results), replace = TRUE), ]
-  
-  # Calculate FST for each pairwise comparison in the bootstrap sample
-  bootstrap_data$bootstrap_FST <- (bootstrap_data$Ht - bootstrap_data$Hs) / bootstrap_data$Ht
-  
-  # Calculate confidence intervals for each pairwise comparison
-  bootstrap_ci <- quantile(bootstrap_data$bootstrap_FST, c(0.025, 0.975))
-  
-  # Store the results in the bootstrap results dataframe
-  bootstrap_results[i, "pop1"] <- bootstrap_data$pop1[1]
-  bootstrap_results[i, "pop2"] <- bootstrap_data$pop2[1]
-  bootstrap_results[i, "lower_ci"] <- bootstrap_ci[1]
-  bootstrap_results[i, "upper_ci"] <- bootstrap_ci[2]
-}
-
-# Print the bootstrap results
-print(bootstrap_results)
+# #genome-wide average for Hs1 and Hs2 for each pop
+# genome_wide_fst_results <- fst_results_df %>%
+#   group_by(pop1, pop2) %>%
+#   summarize(genome_wide_avg_Hs1 = mean(Hs1),
+#             genome_wide_avg_Hs2 = mean(Hs2),
+#             n1 = unique(n1),
+#             n2 = unique(n2))
+# 
+# #calculate Hs for populations PER LOCUS
+# genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
+# genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
+# 
+# #Calculate Ht (uses sample sizes for each pop)
+# genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
+# genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
+# 
+# #calcualte Fst
+# genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
+# genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
+# 
+# # Function to create heatmap
+# create_heatmap <- function(data, title) {
+#   ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
+#     geom_tile() +
+#     geom_text(color = "black") +
+#     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
+#     theme_minimal()
+# }
+# 
+# # Create heatmap for provinces comparisons
+# 
+# provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+# provinces <- rev(provinces)
+# 
+# # Remove "_2022" from population names and reorder according to the specified order
+# genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
+# genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
+# 
+# # Reorder pop1 and pop2 columns based on provinces order
+# genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = provinces)
+# genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = provinces)
+# 
+# heatmap_2022_provinces <- create_heatmap(genome_wide_fst_results)
+# print(heatmap_2022_provinces)
 
 
 
