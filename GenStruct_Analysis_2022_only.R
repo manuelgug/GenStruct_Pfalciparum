@@ -25,8 +25,8 @@ library(Rtsne)
 # Refs: Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4 ; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22 
 
 # b) Determine population structure and connectivity between parasite populations in Mozambique
-# • PCA to determine population structure
-# • Genetic differentiation (Fst) between provinces and regions 
+# • PCA to determine population structure ✔
+# • Genetic differentiation (Fst) between provinces and regions ✔
 # • Proportion of related pairwise infections using IBD between provinces and regions 
 # Refs: Arnau; Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22; Gerlovina et al, Genetics 2022
 
@@ -400,7 +400,11 @@ saveRDS(combined_df_merged, "combined_df_merged_2022_only.RDS")
 # 4.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 #######################################################
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS") 
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 sample_size_provinces <- combined_df_merged %>%
   group_by(province) %>%
@@ -448,7 +452,11 @@ mcmc_results <- moire::run_mcmc(
 #######################################################
 
 mcmc_results <- readRDS("FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS") 
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
@@ -578,6 +586,10 @@ f
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
                                     year = combined_df_merged$year, 
@@ -717,9 +729,10 @@ legend(x = 310, y = 950, legend = names(accum_curves_2022), fill = colors, x.int
 #######################################################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 
 # RUN IN CLUSTER:
@@ -792,9 +805,10 @@ for (i in seq_along(data_frames)) {
 
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
@@ -1050,6 +1064,10 @@ ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
 ########################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 #input for multivariate analyses
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
@@ -1157,6 +1175,9 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
  
 
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
 #PCA
 pca_result <- prcomp(rearranged, scale. = F)
 
@@ -1165,9 +1186,6 @@ pcs <- as.data.frame(pca_result$x)
 
 # Combine principal component scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1192,9 +1210,6 @@ pcs <- as.data.frame(pca_result$x)
 
 # Combine principal component scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1228,9 +1243,6 @@ pcs <- as.data.frame(pcoa_result$vectors)
 # Combine principal coordinate scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
 
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 
@@ -1259,9 +1271,6 @@ pcs <- as.data.frame(pcoa_result$vectors)
 
 # Combine principal coordinate scores with region labels
 pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1318,6 +1327,10 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
 #######################################################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
@@ -1377,11 +1390,6 @@ plotColorbar()
 
 dev.off()
 
-#######################################################
-# 8.- Fst: Genetic differentiation (Fst) between provinces and regions
-#######################################################
-
-
 
 ##############################
 # ALLELE FREQ TSNE
@@ -1389,6 +1397,8 @@ dev.off()
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
 # 1) extract allele freqs
 #import everything into lists
@@ -1452,14 +1462,11 @@ rearranged_processed_allele_freq_results_province <- rearranged_processed_allele
 library(stringr)
 # Split row names by the last "_"
 metadata_province <- rownames(rearranged_processed_allele_freq_results_province)
-metadata_region <- rownames(rearranged_processed_allele_freq_results_region)
 
 provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
 
 metadata_province <- factor(metadata_province, levels = provinces)
-metadata_region <- factor(metadata_region, levels = regions)
-
+metadata_region <- c("North", "South", "Centre", "Centre", "South", "South", "North", "North", "Centre", "Centre", "Centre")
 
 # tsne of provinces
 perplexity <- floor((length(metadata_province) - 1) / 3) #highest possible
@@ -1470,7 +1477,7 @@ tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_pr
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province), )) + # shape = factor(metadata_province$site)
+ggplot(tsne_data_freqs, aes(V1, V2, color = metadata_province, shape = metadata_region)) + # shape = factor(metadata_province$site)
   geom_point(size = 10, alpha = 0.7) +
   labs(title = "t-SNE of Allele Frequencies",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1491,6 +1498,8 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province), )) + # sh
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
@@ -1933,7 +1942,10 @@ print(heatmap_2022_provinces)
 
 #ggsave("heatmap_fst_provinces.png", heatmap_2022_regions, width = 12, height = 10, bg = "white")
 
-round(min(mean_FST_df$mean_FST), 3)
+
+
+
+
 
 #SLIGHTLY DIFFERENT CALCULATION, NO CONFIDENCE INTERVALS. KEEPING IT JUST IN CASE...
 
