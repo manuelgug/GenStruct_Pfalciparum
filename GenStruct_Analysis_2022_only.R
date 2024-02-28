@@ -1734,6 +1734,9 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
+  
+  data$mean_FST<- round(data$mean_FST, 3)
+  
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
     geom_tile() +
     geom_text(color = "black") +
@@ -1903,6 +1906,9 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
 
 # Create heatmap for provinces comparisons
 create_heatmap <- function(data, title) {
+  
+  data$mean_FST<- round(data$mean_FST, 3)
+  
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
     geom_tile() +
     geom_text(color = "black") +
@@ -1927,7 +1933,7 @@ print(heatmap_2022_provinces)
 
 #ggsave("heatmap_fst_provinces.png", heatmap_2022_regions, width = 12, height = 10, bg = "white")
 
-
+round(min(mean_FST_df$mean_FST), 3)
 
 #SLIGHTLY DIFFERENT CALCULATION, NO CONFIDENCE INTERVALS. KEEPING IT JUST IN CASE...
 
