@@ -848,8 +848,8 @@ he_amps <- processed_He_results %>%
   summarize(mean = mean(post_stat_mean)) %>%
   arrange(desc(mean))
 
-#keep top 25% amplicons with highest He
-perc_25<- round(length(unique(he_amps$locus))*0.9)
+#keep top n% amplicons with highest He (or use a numeric threshold like > 0.1 of He or whatever... test.)
+perc_25<- round(length(unique(he_amps$locus))*0.95)
 he_amps_top50 <- he_amps[1:perc_25,]
 
 # FILTER
@@ -1567,8 +1567,8 @@ he_amps <- processed_He_results %>%
   summarize(mean = mean(post_stat_mean)) %>%
   arrange(desc(mean))
 
-#keep top 25% amplicons with highest He
-perc_25<- round(length(unique(he_amps$locus))*0.9)
+#keep top n% amplicons with highest He (or use a numeric threshold like > 0.1 of He or whatever... test.)
+perc_25<- round(length(unique(he_amps$locus))*0.95)
 he_amps_top50 <- he_amps[1:perc_25,]
 
 # FILTER
