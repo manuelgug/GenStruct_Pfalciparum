@@ -434,16 +434,14 @@ dat_filter <- moire::load_long_form_data(combined_df_merged)
 burnin <- 1e4
 num_samples <- 1e4
 pt_chains <- seq(1, .5, length.out = 20)
-pt_num_threads <- 30
+pt_num_threads <- 20
 
 # run moire
 mcmc_results <- moire::run_mcmc(
   dat_filter, is_missing = dat_filter$is_missing,
   verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-  thin = 10) 
-
-saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
+  thin = 10); saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
 
 #######################################################
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
@@ -873,7 +871,7 @@ heterozygosity_data <- distinct(heterozygosity_data)
 heterozygosity_data$fws_province <- heterozygosity_data$Hw/heterozygosity_data$He_province
 heterozygosity_data$fws_region <- heterozygosity_data$Hw/heterozygosity_data$He_region
 
-# Columns to keep
+ # Columns to keep
 columns_to_keep <- c("NIDA2", "locus", "province", "region", "n.alleles",
                      "Hw", "He_province", "He_region", "fws_province", "fws_region")
 # Filter columns
@@ -901,6 +899,27 @@ mean_Fws_per_individual<- heterozygosity_data_filtered %>%
   group_by(NIDA2, province, region) %>%
   summarize(mean_indiv_fws_province = mean(fws_province),
             mean_indiv_fws_region = mean(fws_region))
+
+
+provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+mean_Fws_per_individual$province <- factor(mean_Fws_per_individual$province, levels = provinces)
+mean_Fws_per_individual$region <- factor(mean_Fws_per_individual$region, levels = regions)
+
+ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = province)) +
+  geom_violin() +  # Add violin plot
+  geom_point(position = position_jitter(width = 0.2), size = 2, alpha = 0.4) +  # Add swarm plot
+  labs(x = "Province", y = "Mean Fws per Individual") +
+  theme_minimal()+
+  guides(fill = FALSE)
+
+ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
+  geom_violin() +  # Add violin plot
+  geom_point(position = position_jitter(width = 0.2), size = 2, alpha = 0.4) +  # Add swarm plot
+  labs(x = "Region", y = "Mean Fws per Individual") +
+  theme_minimal()+
+  guides(fill = FALSE)
 
 
 # STATISTICAL ANALYSES:::     CHECK CAREFULLY!!!!!
