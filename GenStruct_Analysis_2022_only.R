@@ -800,7 +800,6 @@ for (i in seq_along(data_frames)) {
 # 10.- He and Fws results 
 #######################################################
 
-
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
 
@@ -840,6 +839,23 @@ for (i in seq_along(He_results_list)) {
 
 #formatting categories
 processed_He_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_He_results$population)
+
+######
+# keep amplicons with high He:
+
+he_amps <- processed_He_results %>%
+  group_by(locus) %>%
+  summarize(mean = mean(post_stat_mean)) %>%
+  arrange(desc(mean))
+
+#keep top 25% amplicons with highest He
+perc_25<- round(length(unique(he_amps$locus))*0.9)
+he_amps_top50 <- he_amps[1:perc_25,]
+
+# FILTER
+processed_He_results <- processed_He_results[processed_He_results$locus %in% he_amps_top50$locus,]
+#####
+
 
 library(stringr)
 processed_He_results <- processed_He_results %>%
@@ -915,7 +931,7 @@ mean_Fws_per_individual<- heterozygosity_data_filtered %>%
             mean_indiv_fws_region = mean(fws_region))
 
 
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
 mean_Fws_per_individual$province <- factor(mean_Fws_per_individual$province, levels = provinces)
@@ -1364,7 +1380,7 @@ coi  <- coi[ ord]
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                      alpha = 0.05, nr = 1e3)  
 
-saveRDS(dres0_2022, "dres0_2022.RDS")
+#saveRDS(dres0_2022, "dres0_2022.RDS")
 # dres0_2022 <- readRDS("dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
@@ -1476,6 +1492,8 @@ tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_pr
 # Convert t-SNE results to data frame
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
 
+tsne_data_freqs<- cbind(tsne_data_freqs, metadata_region)
+
 # Plot t-SNE of freqs
 ggplot(tsne_data_freqs, aes(V1, V2, color = metadata_province, shape = metadata_region)) + # shape = factor(metadata_province$site)
   geom_point(size = 10, alpha = 0.7) +
@@ -1550,7 +1568,7 @@ he_amps <- processed_He_results %>%
   arrange(desc(mean))
 
 #keep top 25% amplicons with highest He
-perc_25<- round(length(unique(he_amps$locus))*0.25)
+perc_25<- round(length(unique(he_amps$locus))*0.9)
 he_amps_top50 <- he_amps[1:perc_25,]
 
 # FILTER
