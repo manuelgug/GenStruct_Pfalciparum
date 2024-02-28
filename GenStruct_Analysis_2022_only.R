@@ -400,7 +400,7 @@ saveRDS(combined_df_merged, "combined_df_merged_2022_only.RDS")
 # 4.- CHECK SAMPLE SIZES FOR EACH PAIR OF VARIABLES: sample size affects He calculation, probably will need rarefactions or something similar
 #######################################################
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS") 
 
 sample_size_provinces <- combined_df_merged %>%
   group_by(province) %>%
@@ -425,6 +425,8 @@ sample_size_regions
 
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
 
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
 colnames(combined_df_merged)[1]<- c("sample_id")
 
 # set MOIRE parameters
@@ -432,13 +434,14 @@ dat_filter <- moire::load_long_form_data(combined_df_merged)
 burnin <- 1e4
 num_samples <- 1e4
 pt_chains <- seq(1, .5, length.out = 20)
+pt_num_threads <- 30
 
 # run moire
 mcmc_results <- moire::run_mcmc(
   dat_filter, is_missing = dat_filter$is_missing,
   verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-  thin = 10)
+  thin = 10) 
 
 saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
 
@@ -446,8 +449,8 @@ saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR
 # 5.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("TEST_all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS") # change name to final file, THIS IS TEST!!
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
+mcmc_results <- readRDS("FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS") 
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
@@ -576,7 +579,7 @@ f
 ################################### 
 #ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
                                     year = combined_df_merged$year, 
@@ -715,7 +718,7 @@ legend(x = 310, y = 950, legend = names(accum_curves_2022), fill = colors, x.int
 # 9.- calculate He for each population (per region/province)
 #######################################################
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
@@ -790,12 +793,15 @@ for (i in seq_along(data_frames)) {
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
-rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 
 # Load each RDS file into the list with the file name as the list name
@@ -821,15 +827,14 @@ for (i in seq_along(He_results_list)) {
 }
 
 #formatting categories
-processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
+processed_He_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_He_results$population)
 
 library(stringr)
 processed_He_results <- processed_He_results %>%
-  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
-         year = substr(population, nchar(population) - 3, nchar(population)))
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
 
-processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
-processed_He_results$year <- as.numeric(processed_He_results$year)
+#processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
+#processed_He_results$year <- as.numeric(processed_He_results$year)
 
 
 # 2) calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
@@ -841,26 +846,26 @@ heterozygosity_data <- combined_df_merged %>%
 # 3) calculate 1-Fws: 1-Fws = Hw/He
 #merge He from provinces
 merged_data <- heterozygosity_data %>%
-  left_join(processed_He_results, by = c("locus" = "locus", "year" = "year")) %>%
+  left_join(processed_He_results, by = c("locus" = "locus")) %>%
   filter(population == province) %>%
   mutate(He_province = ifelse(is.na(post_stat_mean), NA, post_stat_mean)) %>%
-  select(NIDA2, locus, year, He_province)
+  select(NIDA2, locus, He_province)
 
 heterozygosity_data <- heterozygosity_data %>%
-  left_join(merged_data, by = c("NIDA2", "locus", "year"))
+  left_join(merged_data, by = c("NIDA2", "locus"))
 
 heterozygosity_data <- distinct(heterozygosity_data)
 heterozygosity_data
 
 #merge He from regions
 merged_data <- heterozygosity_data %>%
-  left_join(processed_He_results, by = c("locus" = "locus", "year" = "year")) %>%
+  left_join(processed_He_results, by = c("locus" = "locus")) %>%
   filter(population == region) %>%
   mutate(He_region = ifelse(is.na(post_stat_mean), NA, post_stat_mean)) %>%
-  select(NIDA2, locus, year, He_region)
+  select(NIDA2, locus, He_region)
 
 heterozygosity_data <- heterozygosity_data %>%
-  left_join(merged_data, by = c("NIDA2", "locus", "year"))
+  left_join(merged_data, by = c("NIDA2", "locus"))
 
 heterozygosity_data <- distinct(heterozygosity_data)
 
@@ -869,7 +874,7 @@ heterozygosity_data$fws_province <- heterozygosity_data$Hw/heterozygosity_data$H
 heterozygosity_data$fws_region <- heterozygosity_data$Hw/heterozygosity_data$He_region
 
 # Columns to keep
-columns_to_keep <- c("NIDA2", "locus", "year", "province", "region", "n.alleles",
+columns_to_keep <- c("NIDA2", "locus", "province", "region", "n.alleles",
                      "Hw", "He_province", "He_region", "fws_province", "fws_region")
 # Filter columns
 heterozygosity_data_filtered <- heterozygosity_data %>%
@@ -884,7 +889,6 @@ heterozygosity_data_filtered[is.na(heterozygosity_data_filtered)] <- 0
 #sanity check
 if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combined_df_merged$NIDA2))) & 
     (length(unique(heterozygosity_data_filtered$locus)) == length(unique(combined_df_merged$locus))) & 
-    (length(unique(heterozygosity_data_filtered$year)) == length(unique(combined_df_merged$year))) & 
     (length(unique(heterozygosity_data_filtered$province)) == length(unique(combined_df_merged$province))) & 
     (length(unique(heterozygosity_data_filtered$region)) == length(unique(combined_df_merged$region)))) {
   print("All looks good.")
@@ -894,7 +898,7 @@ if ((length(unique(heterozygosity_data_filtered$NIDA2)) == length(unique(combine
 
 #WHY IS IT NOT BETWEEN 0 AND 1??? (should it be?)
 mean_Fws_per_individual<- heterozygosity_data_filtered %>%
-  group_by(NIDA2, year, province, region) %>%
+  group_by(NIDA2, province, region) %>%
   summarize(mean_indiv_fws_province = mean(fws_province),
             mean_indiv_fws_region = mean(fws_region))
 
@@ -1251,7 +1255,7 @@ tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = prov
 tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
 
 # Plot t-SNE of freqs
-ts <- ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1341,7 +1345,7 @@ dev.off()
 # ALLELE FREQ TSNE
 #############################
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 
 # 1) extract allele freqs
 #import everything into lists
@@ -1453,8 +1457,8 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) +
 # 11.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
 
-#combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
-
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
@@ -1463,8 +1467,8 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) +
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
-rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
+rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 
 # Load each RDS file into the list with the file name as the list name
@@ -1490,22 +1494,20 @@ for (i in seq_along(He_results_list)) {
 }
 
 #formatting categories
-processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
+processed_He_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_He_results$population)
 
 library(stringr)
 processed_He_results <- processed_He_results %>%
-  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
-         year = substr(population, nchar(population) - 3, nchar(population)))
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
 
-processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
-processed_He_results$year <- as.numeric(processed_He_results$year)
+#processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
+#processed_He_results$year <- as.numeric(processed_He_results$year)
 
 #separate provinces and regions
 processed_He_results_provinces <- processed_He_results[processed_He_results$geo == "province", ]
-processed_He_results_provinces$pop <- paste0(processed_He_results_provinces$population, "_", processed_He_results_provinces$year)
-  
+processed_He_results_provinces$pop <- processed_He_results_provinces$population
 processed_He_results_regions<- processed_He_results[processed_He_results$geo == "region", ]
-processed_He_results_regions$pop <- paste0(processed_He_results_regions$population, "_", processed_He_results_regions$year)
+processed_He_results_regions$pop <- processed_He_results_regions$population
 
 
 #sample sizes for each population
@@ -1514,14 +1516,14 @@ sample_size_provinces <- combined_df_merged %>%
   group_by(year, province) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
-sample_size_provinces$pop <- paste0(sample_size_provinces$province,"_", sample_size_provinces$year)
+sample_size_provinces$pop <- sample_size_provinces$province
 sample_size_provinces
 
 sample_size_regions <- combined_df_merged %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
-sample_size_regions$pop <- paste0(sample_size_regions$region,"_", sample_size_regions$year)
+sample_size_regions$pop <- sample_size_regions$region
 sample_size_regions
 
 
@@ -1660,7 +1662,7 @@ mean_FST_df <- data.frame(
 )
 
 # Remove "_2022" from population names and reorder according to the specified order
-mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+#mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
 
 # Exclude rows with 0 in the last three columns
 mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
@@ -1831,7 +1833,7 @@ mean_FST_df <- data.frame(
 )
 
 # Remove "_2022" from population names and reorder according to the specified order
-mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+#mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
 
 # Exclude rows with 0 in the last three columns
 mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
@@ -1868,7 +1870,7 @@ library(tidyr)
 mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
 
 # Reorder pop1 and pop2 columns based on provinces order
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 provinces <- rev(provinces)
 
 mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = provinces)
