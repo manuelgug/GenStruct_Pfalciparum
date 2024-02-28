@@ -987,6 +987,13 @@ signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <
 
 
 # Changes in He distributions and means by year
+
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+combined_data_province$province <- factor(combined_data_province$province, levels = provinces)
+combined_data_region$region <- factor(combined_data_region$region, levels = regions)
+
 #provinces
 mean_data <- combined_data_province %>%
   group_by(province) %>%
@@ -1002,6 +1009,15 @@ ggplot(combined_data_province, aes(x = He_province)) +
        y = "Frequency") +
   facet_wrap(~ province) +
   theme_minimal()
+
+
+ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
+  geom_violin(alpha =0.7) +  # Add violin plot
+  ggbeeswarm::geom_beeswarm() +
+  labs(x = "Region", y = "Mean Fws per Individual") +
+  theme_minimal()+
+  guides(fill = FALSE)
+
 
 #ggsave("mean_he_province_distros.png", ph, width = 14, height = 10, bg = "white")
 
@@ -1021,12 +1037,19 @@ ggplot(combined_data_region, aes(x = He_region)) +
   facet_wrap(~ region) +
   theme_minimal()
 
+ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
+  geom_violin() +  # Add violin plot
+  ggbeeswarm::geom_beeswarm(dodge.width = 0.5) +
+  labs(x = "Region", y = "Mean Fws per Individual") +
+  theme_minimal()+
+  guides(fill = FALSE)
+
 
 ########################
 ###### PCA ########
 ########################
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 
 #input for multivariate analyses
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
@@ -1294,7 +1317,7 @@ ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
 # 7.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
 #######################################################
 
-combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
@@ -1365,12 +1388,12 @@ dev.off()
 #############################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 
 # 1) extract allele freqs
 #import everything into lists
-rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
-
+rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 # Load each RDS file into the list with the file name as the list name
 allele_freqs_list <- list()
@@ -1395,20 +1418,15 @@ for (i in seq_along(allele_freqs_list)) {
 }
 
 #formatting categories
-processed_allele_freq_results$population <- gsub("_MOIRE-RESULTS", "", processed_allele_freq_results$population)
+processed_allele_freq_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_allele_freq_results$population)
 
 library(stringr)
 processed_allele_freq_results <- processed_allele_freq_results %>%
-  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
-         year = substr(population, nchar(population) - 3, nchar(population)))
-
-processed_allele_freq_results$population <- gsub("TEST_|_202.*", "", processed_allele_freq_results$population)
-processed_allele_freq_results$year <- as.numeric(processed_allele_freq_results$year)
-processed_allele_freq_results$category <- paste0(processed_allele_freq_results$population, "_", processed_allele_freq_results$year)
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
 
 
 # Melt the data frame to convert it from wide to long format
-melted <- melt(processed_allele_freq_results, id.vars = c("category", "post_allele_freqs_mean"), measure.vars = "allele")
+melted <- melt(processed_allele_freq_results, id.vars = c("population", "post_allele_freqs_mean"), measure.vars = "allele")
 melted<-melted[,-3]
 
 library(tidyr)
@@ -1421,7 +1439,7 @@ rearranged_processed_allele_freq_results <- melted %>%
 
 # format
 rearranged_processed_allele_freq_results <- as.data.frame(rearranged_processed_allele_freq_results)
-rownames(rearranged_processed_allele_freq_results) <- rearranged_processed_allele_freq_results$category
+rownames(rearranged_processed_allele_freq_results) <- rearranged_processed_allele_freq_results$population
 rearranged_processed_allele_freq_results <- rearranged_processed_allele_freq_results[, -1]
 rearranged_processed_allele_freq_results <- replace(rearranged_processed_allele_freq_results, is.na(rearranged_processed_allele_freq_results), 0)
 
@@ -1433,23 +1451,18 @@ rearranged_processed_allele_freq_results_province <- rearranged_processed_allele
 
 library(stringr)
 # Split row names by the last "_"
-metadata_province <- str_split(rownames(rearranged_processed_allele_freq_results_province), "_([^_]*)$", simplify = TRUE)
-metadata_region <- str_split(rownames(rearranged_processed_allele_freq_results_region), "_([^_]*)$", simplify = TRUE)
+metadata_province <- rownames(rearranged_processed_allele_freq_results_province)
+metadata_region <- rownames(rearranged_processed_allele_freq_results_region)
 
-
-# Create a data frame with two columns named site and year
-metadata_province <- data.frame(site = metadata_province[, 1], row.names = NULL)
-metadata_region <- data.frame(site = metadata_region[, 1], row.names = NULL)
-
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
-metadata_province$site <- factor(metadata_province$site, levels = provinces)
-metadata_region$site <- factor(metadata_region$site, levels = regions)
+metadata_province <- factor(metadata_province, levels = provinces)
+metadata_region <- factor(metadata_region, levels = regions)
 
 
 # tsne of provinces
-perplexity <- floor((nrow(metadata_province) - 1) / 3) #highest possible
+perplexity <- floor((length(metadata_province) - 1) / 3) #highest possible
 set.seed(69)
 tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_province), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = perplexity)
 
@@ -1457,7 +1470,7 @@ tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_pr
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province$site), )) + # shape = factor(metadata_province$site)
+ggplot(tsne_data_freqs, aes(V1, V2, color = factor(metadata_province), )) + # shape = factor(metadata_province$site)
   geom_point(size = 10, alpha = 0.7) +
   labs(title = "t-SNE of Allele Frequencies",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1519,8 +1532,22 @@ library(stringr)
 processed_He_results <- processed_He_results %>%
   mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
 
-#processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
-#processed_He_results$year <- as.numeric(processed_He_results$year)
+######
+# keep amplicons with high He:
+
+he_amps <- processed_He_results %>%
+  group_by(locus) %>%
+  summarize(mean = mean(post_stat_mean)) %>%
+  arrange(desc(mean))
+
+#keep top 25% amplicons with highest He
+perc_25<- round(length(unique(he_amps$locus))*0.25)
+he_amps_top50 <- he_amps[1:perc_25,]
+
+# FILTER
+processed_He_results <- processed_He_results[processed_He_results$locus %in% he_amps_top50$locus,]
+#####
+
 
 #separate provinces and regions
 processed_He_results_provinces <- processed_He_results[processed_He_results$geo == "province", ]
@@ -1654,7 +1681,7 @@ for (i in 1:nrow(combinations)) {
   comparison_name <- paste(pop1, pop2, sep = "_vs_")
   
   # Perform bootstrap resampling
-  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 1000)
+  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
 }
 
 
@@ -1825,7 +1852,7 @@ for (i in 1:nrow(combinations)) {
   comparison_name <- paste(pop1, pop2, sep = "_vs_")
   
   # Perform bootstrap resampling
-  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 1000)
+  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
 }
 
 
