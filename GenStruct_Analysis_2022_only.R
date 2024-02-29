@@ -1465,18 +1465,26 @@ merged_df_signif_geo$conn_provinces <- paste0(merged_df_signif_geo$province_s1, 
 merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_", merged_df_signif_geo$region_s2)
 
 
-ggplot(merged_df_signif_geo, aes(x = conn_provinces, y = estimate, ymin = CI_lower, ymax = CI_upper)) +
-  geom_point(position = position_dodge(width = 0.3)) +  # Add points
-  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +  # Add error bars
-  labs(x = "Connected Provinces", y = "Estimate") +
+# Sort the data frame by estimate in descending order
+sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
+
+# Plot for conn_regions
+ggplot(sorted_df, aes(x = reorder(conn_regions, -estimate), y = estimate, ymin = CI_lower, ymax = CI_upper, fill = conn_regions)) +
+  geom_violin(alpha = 0.7, cex = 0.1) +
+  ggbeeswarm::geom_beeswarm(cex = 0.05, alpha = 0.2) +
+  labs(x = "Region Connectivity", y = "IBD") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  guides(fill = FALSE)
 
-
-
-
-
-
+# Plot for conn_provinces
+ggplot(sorted_df, aes(x = reorder(conn_provinces, -estimate), y = estimate, fill = conn_provinces)) +
+  geom_violin(alpha = 0.7, cex = 0.1) +
+  ggbeeswarm::geom_beeswarm(cex = 0.01, alpha = 0.1) +
+  labs(x = "Province Connectivity", y = "IBD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  guides(fill = FALSE)
 
 
 
