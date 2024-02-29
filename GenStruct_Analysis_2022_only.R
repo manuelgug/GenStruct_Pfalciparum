@@ -1370,7 +1370,7 @@ afreq <- calcAfreq(dsmp, coi, tol = 1e-5)
 str(afreq, list.len = 2)
 
 #order provinces from north to wouth
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 nsite     <- table(meta$province)[provinces]
 ord       <- order(factor(meta$province, levels = provinces))
 dsmp <- dsmp[ord]
@@ -1380,7 +1380,7 @@ coi  <- coi[ ord]
 dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
                      alpha = 0.05, nr = 1e3)  
 
-#saveRDS(dres0_2022, "dres0_2022.RDS")
+# saveRDS(dres0_2022, "dres0_2022.RDS")
 # dres0_2022 <- readRDS("dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
@@ -1405,6 +1405,79 @@ par(mar = c(1, 0, 2, 3))
 plotColorbar()
 
 dev.off()
+
+
+### EXAMINE PAIRS OF SAMPLES!
+str(dres0_2022)
+
+#extract info
+estimates_df <-as.data.frame(dres0_2022[1:924, 1:924, "estimate"])
+estimates_p <-as.data.frame(dres0_2022[1:924, 1:924, "p_value"])
+estimates_CI_lower <- as.data.frame(dres0_2022[1:924, 1:924, "CI_lower"])
+estimates_CI_upper <- as.data.frame(dres0_2022[1:924, 1:924, "CI_upper"])
+
+library(reshape2)
+#sort info into a single df
+
+estimates_df_long <- reshape2::melt(as.matrix(estimates_df))
+names(estimates_df_long) <- c("sample1", "sample2", "estimate")
+estimates_p_long <- reshape2::melt(as.matrix(estimates_p))
+names(estimates_p_long) <- c("sample1", "sample2", "p_value")
+estimates_CI_lower_long <- reshape2::melt(as.matrix(estimates_CI_lower))
+names(estimates_CI_lower_long) <- c("sample1", "sample2", "CI_lower")
+estimates_CI_upper_long <- reshape2::melt(as.matrix(estimates_CI_upper))
+names(estimates_CI_upper_long) <- c("sample1", "sample2", "CI_upper")
+
+merged_df <- merge(estimates_df_long, estimates_p_long, by = c("sample1", "sample2"))
+merged_df <- merge(merged_df, estimates_CI_lower_long, by = c("sample1", "sample2"))
+merged_df <- merge(merged_df, estimates_CI_upper_long, by = c("sample1", "sample2"))
+
+#saveRDS(merged_df, "dres0_2022_TABLE.RDS")
+merged_df <- readRDS("dres0_2022_TABLE.RDS")
+
+#remove NA rows
+merged_df <- merged_df[complete.cases(merged_df),]
+
+#keep significant cases
+merged_df_signif <- merged_df[merged_df$p_value < 0.05,]
+
+#merge with geo locations for each pair of samples compared
+merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region")], by.x = "sample1", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[7:8] <- c("province_s1", "region_s1")
+merged_df_signif_geo<- distinct(merged_df_signif_geo)
+
+merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region")], by.x = "sample2", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[9:10] <- c("province_s2", "region_s2")
+merged_df_signif_geo<- distinct(merged_df_signif_geo)
+
+combos_iniciales<- paste0(merged_df_signif[,1], merged_df_signif[,2])
+combos_finales<- paste0(merged_df_signif_geo[,1], merged_df_signif_geo[,2])
+
+#sanity check
+if (length(combos_finales %in% combos_finales) == dim(merged_df_signif_geo)[1]){
+  print("merge was successful.")
+} else{
+  print("grab a coffee.")
+}
+
+#make connectivity columns
+merged_df_signif_geo$conn_provinces <- paste0(merged_df_signif_geo$province_s1, "_", merged_df_signif_geo$province_s2)
+merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_", merged_df_signif_geo$region_s2)
+
+
+ggplot(merged_df_signif_geo, aes(x = conn_provinces, y = estimate, ymin = CI_lower, ymax = CI_upper)) +
+  geom_point(position = position_dodge(width = 0.3)) +  # Add points
+  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +  # Add error bars
+  labs(x = "Connected Provinces", y = "Estimate") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
 
 
 ##############################
