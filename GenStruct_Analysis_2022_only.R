@@ -1432,6 +1432,8 @@ merged_df <- merge(estimates_df_long, estimates_p_long, by = c("sample1", "sampl
 merged_df <- merge(merged_df, estimates_CI_lower_long, by = c("sample1", "sample2"))
 merged_df <- merge(merged_df, estimates_CI_upper_long, by = c("sample1", "sample2"))
 
+
+
 #saveRDS(merged_df, "dres0_2022_TABLE.RDS")
 merged_df <- readRDS("dres0_2022_TABLE.RDS")
 
@@ -1469,7 +1471,7 @@ merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_",
 sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
 
 # Plot for conn_regions
-ggplot(sorted_df, aes(x = reorder(conn_regions, -estimate), y = estimate, ymin = CI_lower, ymax = CI_upper, fill = conn_regions)) +
+ggplot(sorted_df, aes(x = reorder(conn_regions, -estimate), y = estimate, fill = conn_regions)) +
   geom_violin(alpha = 0.7, cex = 0.1) +
   ggbeeswarm::geom_beeswarm(cex = 0.05, alpha = 0.2) +
   labs(x = "Region Connectivity", y = "IBD") +
@@ -1757,9 +1759,6 @@ fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
 fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
 fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 
-
-library(boot)
-
 # Define a function to calculate FST
 calculate_FST <- function(data, indices) {
   sampled_data <- data[indices, ]
@@ -1773,6 +1772,10 @@ calculate_FST <- function(data, indices) {
   
   return(FST)
 }
+
+
+library(boot)
+library(boot.pval)
 
 # Create a list to store bootstrap results
 bootstrap_results <- list()
@@ -1796,6 +1799,15 @@ for (i in 1:nrow(combinations)) {
 # Calculate the mean of bootstrap replicates for each pairwise comparison
 mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
 
+p_value <- data.frame()
+
+for (i in seq(1:length(bootstrap_results))){
+  p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
+  p_value <- rbind(p_value, p)
+}
+
+colnames(p_value)<- "p_value"
+
 # Create a function to extract confidence intervals for the mean
 get_mean_confidence_intervals <- function(bootstrap_result) {
   ci <- boot.ci(bootstrap_result, type = "perc")
@@ -1812,7 +1824,8 @@ mean_FST_df <- data.frame(
   pairwise_comparisons = names(mean_FST),
   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
-  upper_limit = sapply(mean_confidence_intervals, `[`, 2)
+  upper_limit = sapply(mean_confidence_intervals, `[`, 2),
+  p_val = p_value
 )
 
 # Remove "_2022" from population names and reorder according to the specified order
@@ -1829,14 +1842,18 @@ mean_FST_df_filtered<- mean_FST_df_filtered %>%
 mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
 
-# Create the boxplot
-ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
+# Add a column indicating significance
+mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+
+# Plot with significance indication
+ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
   geom_boxplot() +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+  scale_color_manual(values = c("red")) +  # Set colors for significance levels
   labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  theme_minimal()+
-  coord_flip()  # Flip the coordinates to make the plot horizontal
+  theme_minimal() +
+  coord_flip()
 
 #ggsave("fst_CI_provinces.png", fstci, width = 12, height = 10, bg = "white")
 
@@ -1844,12 +1861,13 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
 create_heatmap <- function(data, title) {
   
   data$mean_FST<- round(data$mean_FST, 3)
+  data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
   
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
     geom_tile() +
     geom_text(color = "black") +
     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
-    theme_minimal()+
+    theme_minimal() +
     labs(x = "", y = "")
 }
 
@@ -1931,9 +1949,6 @@ fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
 fst_results_df$Ht <- ((fst_results_df$n1 * fst_results_df$Hs1)+ (fst_results_df$n2 * fst_results_df$Hs2))/(fst_results_df$n1 + fst_results_df$n2)
 fst_results_df$Ht <- round(as.numeric(fst_results_df$Ht),3)
 
-
-library(boot)
-
 # Define a function to calculate FST
 calculate_FST <- function(data, indices) {
   sampled_data <- data[indices, ]
@@ -1947,6 +1962,10 @@ calculate_FST <- function(data, indices) {
   
   return(FST)
 }
+
+
+library(boot)
+library(boot.pval)
 
 # Create a list to store bootstrap results
 bootstrap_results <- list()
@@ -1970,6 +1989,15 @@ for (i in 1:nrow(combinations)) {
 # Calculate the mean of bootstrap replicates for each pairwise comparison
 mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
 
+p_value <- data.frame()
+
+for (i in seq(1:length(bootstrap_results))){
+  p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
+  p_value <- rbind(p_value, p)
+}
+
+colnames(p_value)<- "p_value"
+
 # Create a function to extract confidence intervals for the mean
 get_mean_confidence_intervals <- function(bootstrap_result) {
   ci <- boot.ci(bootstrap_result, type = "perc")
@@ -1986,7 +2014,8 @@ mean_FST_df <- data.frame(
   pairwise_comparisons = names(mean_FST),
   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
-  upper_limit = sapply(mean_confidence_intervals, `[`, 2)
+  upper_limit = sapply(mean_confidence_intervals, `[`, 2),
+  p_val = p_value
 )
 
 # Remove "_2022" from population names and reorder according to the specified order
@@ -2002,26 +2031,31 @@ mean_FST_df_filtered<- mean_FST_df_filtered %>%
 # Reorder pairwise_comparisons based on mean_FST
 mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+# Add a column indicating significance
+mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
 
-# Create the boxplot
-ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST)) +
+# Plot with significance indication
+ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
   geom_boxplot() +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+  scale_color_manual(values = c("black", "red")) +  # Set colors for significance levels
   labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  theme_minimal()+
-  coord_flip()  # Flip the coordinates to make the plot horizontal
+  theme_minimal() +
+  coord_flip()
 
-# Create heatmap for provinces comparisons
+
+# Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
   
   data$mean_FST<- round(data$mean_FST, 3)
+  data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
   
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = round(mean_FST, 3))) +
+  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
     geom_tile() +
     geom_text(color = "black") +
     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
-    theme_minimal()+
+    theme_minimal() +
     labs(x = "", y = "")
 }
 
