@@ -1861,6 +1861,7 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color =
 create_heatmap <- function(data, title) {
   
   data$mean_FST<- round(data$mean_FST, 3)
+  data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
   data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
   
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
@@ -2049,6 +2050,7 @@ ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color =
 create_heatmap <- function(data, title) {
   
   data$mean_FST<- round(data$mean_FST, 3)
+  data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
   data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
   
   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
