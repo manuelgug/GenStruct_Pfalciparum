@@ -21,13 +21,12 @@ library(Rtsne)
 #   ◦ Fixation index Fws?? ✔
 # • Population genetic diversity: 
 #   ◦ Calculate He per locus per province and region ✔
-#   ◦ Correlates with transmission intensity?
 # Refs: Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4 ; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22 
 
 # b) Determine population structure and connectivity between parasite populations in Mozambique
 # • PCA to determine population structure ✔
 # • Genetic differentiation (Fst) between provinces and regions ✔
-# • Proportion of related pairwise infections using IBD between provinces and regions 
+# • Proportion of related pairwise infections using IBD between provinces and regions ✔
 # Refs: Arnau; Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22; Gerlovina et al, Genetics 2022
 
 # c) Determine clonal emergence vs spread from other regions for parasites carrying VOC (dhps581 and dhps436)
@@ -1084,6 +1083,15 @@ combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
+#add VOC
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
+  
+combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
+                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
+                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
+
+combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
 
 #input for multivariate analyses
 raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
@@ -1094,7 +1102,9 @@ raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2,
                                    n.alleles = combined_df_merged$n.alleles,
                                    norm.reads.locus = combined_df_merged$norm.reads.locus,
                                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
-                                   run_id = combined_df_merged$run_id))
+                                   run_id = combined_df_merged$run_id,
+                                   VOC = combined_df_merged$VOC))
+
 
 # ## PICK LOCI WITH HIGHER He for multivariate analyses::: MAKES WORSE PLOTS
 # 
@@ -1168,7 +1178,7 @@ rearranged <- replace(rearranged, is.na(rearranged), 0)
 
 #pca labels:
 NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
-pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region)
+pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region, VOC)
 
 if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
   print("Order of categorical variables is ok.")
@@ -1201,7 +1211,7 @@ pca_result <- prcomp(rearranged, scale. = F)
 pcs <- as.data.frame(pca_result$x)
 
 # Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1210,7 +1220,7 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
 # Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$VOC))) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "",
        x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
@@ -1225,7 +1235,7 @@ pca_result <- prcomp(rearranged_pres_abs, scale. = F)
 pcs <- as.data.frame(pca_result$x)
 
 # Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1234,7 +1244,7 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
 # Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$region))) +
+ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pca_labels$VOC))) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "",
        x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
@@ -1257,7 +1267,7 @@ pcoa_result <- pcoa(bray_curtis_dist)
 pcs <- as.data.frame(pcoa_result$vectors)
 
 # Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1265,7 +1275,7 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 # # Plot PCoA
 # pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
 
-ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = region)) +
+ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
   geom_point(size = 4, alpha = 0.7) +
   # labs(title = "",
   #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
@@ -1286,7 +1296,7 @@ pcoa_result <- pcoa(bray_curtis_dist)
 pcs <- as.data.frame(pcoa_result$vectors)
 
 # Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region)
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
 
 pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
 pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
@@ -1294,7 +1304,7 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 # # Plot PCoA
 # pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
 
-ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = region)) +
+ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
   geom_point(size = 4, alpha = 0.7) +
   # labs(title = "",
   #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
@@ -1311,9 +1321,9 @@ tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose 
 
 # Convert t-SNE results to data frame
 tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region)
+tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
 tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
-tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region)
+tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
 
 # Order factors
 tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
@@ -1322,7 +1332,7 @@ tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = prov
 tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
 
 # Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
+ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = VOC)) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (allele frequency)",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1331,7 +1341,7 @@ ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = region)) +
 #ggsave("tsne_sample_freqs.png", ts, width = 12, height = 10, bg = "white")
 
 # Plot t-SNE of presence/absence
-ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = region)) +
+ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = VOC)) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
        x = "t-SNE 1", y = "t-SNE 2") +
@@ -1347,6 +1357,15 @@ combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
+#add VOC
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
+
+combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
+                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
+                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
+
+combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
@@ -1444,12 +1463,12 @@ merged_df <- merged_df[complete.cases(merged_df),]
 merged_df_signif <- merged_df[merged_df$p_value < 0.05,]
 
 #merge with geo locations for each pair of samples compared
-merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region")], by.x = "sample1", by.y = "NIDA2")
-colnames(merged_df_signif_geo)[7:8] <- c("province_s1", "region_s1")
+merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample1", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[7:9] <- c("province_s1", "region_s1", "VOC_s1")
 merged_df_signif_geo<- distinct(merged_df_signif_geo)
 
-merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region")], by.x = "sample2", by.y = "NIDA2")
-colnames(merged_df_signif_geo)[9:10] <- c("province_s2", "region_s2")
+merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample2", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[10:12] <- c("province_s2", "region_s2", "VOC_s2")
 merged_df_signif_geo<- distinct(merged_df_signif_geo)
 
 combos_iniciales<- paste0(merged_df_signif[,1], merged_df_signif[,2])
