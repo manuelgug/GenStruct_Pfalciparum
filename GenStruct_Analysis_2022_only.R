@@ -1485,27 +1485,84 @@ if (length(combos_finales %in% combos_finales) == dim(merged_df_signif_geo)[1]){
 merged_df_signif_geo$conn_provinces <- paste0(merged_df_signif_geo$province_s1, "_", merged_df_signif_geo$province_s2)
 merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_", merged_df_signif_geo$region_s2)
 
-
 # Sort the data frame by estimate in descending order
 sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
 
-# Plot for conn_regions
-ggplot(sorted_df, aes(x = reorder(conn_regions, -estimate), y = estimate, fill = conn_regions)) +
-  geom_violin(alpha = 0.7, cex = 0.1) +
-  ggbeeswarm::geom_beeswarm(cex = 0.05, alpha = 0.2) +
-  labs(x = "Region Connectivity", y = "IBD") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  guides(fill = FALSE)
+## PROVINCES CONNECTIVITY
 
-# Plot for conn_provinces
-ggplot(sorted_df, aes(x = reorder(conn_provinces, -estimate), y = estimate, fill = conn_provinces)) +
-  geom_violin(alpha = 0.7, cex = 0.1) +
-  ggbeeswarm::geom_beeswarm(cex = 0.01, alpha = 0.1) +
-  labs(x = "Province Connectivity", y = "IBD") +
+# Calculate the median for each group
+median_data <- aggregate(estimate ~ conn_provinces, sorted_df, median)
+
+# Reorder conn_regions based on the median values in descending order
+sorted_df$conn_provinces <- factor(sorted_df$conn_provinces, levels = median_data[order(-median_data$estimate), "conn_provinces"])
+
+# Plot with legend and sorted x-axis
+ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
+  geom_violin(width = 1) +
+  geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  guides(fill = FALSE)
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Province") +  # Customize legend title
+  ggtitle("Province Connectivity") +
+  xlab("")+
+  ylab("IBD")
+
+
+## REGIONS CONNECTIVITY
+
+#remove Dry because it should not be incldued in Regions comparison
+sorted_df<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
+
+# Calculate the median for each group
+median_data <- aggregate(estimate ~ conn_regions, sorted_df, median)
+
+# Reorder conn_regions based on the median values in descending order
+sorted_df$conn_regions <- factor(sorted_df$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
+
+# Plot with legend and sorted x-axis
+ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
+  geom_violin(width = 1) +
+  geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  ggtitle("Region Connectivity") +
+  xlab("")+
+  ylab("IBD")+
+  guides(fill = FALSE) 
+
+
+# pairwise proportions of related infections #
+
+#number of pairwise significantly related (IBD) infections for provinces and regions
+table(sorted_df$conn_provinces)
+table(sorted_df$conn_regions)
+
+#sample sizes
+sample_size_provinces <- combined_df_merged %>%
+  group_by(province) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_provinces
+
+sample_size_regions <- combined_df_merged %>%
+  group_by(year, region) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_regions
+
+
+n_choose_k <- function(n, k=2) { # k = 2 is for paiwrise
+  return(factorial(n) / (factorial(k) * factorial(n - k)))
+}
+
+sapply(sample_size_provinces$unique_NIDA2_count, n_choose_k, k = 2)
+
 
 
 
