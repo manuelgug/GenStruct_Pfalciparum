@@ -936,19 +936,30 @@ regions <- c("North", "Centre", "South")
 mean_Fws_per_individual$province <- factor(mean_Fws_per_individual$province, levels = provinces)
 mean_Fws_per_individual$region <- factor(mean_Fws_per_individual$region, levels = regions)
 
-ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = province)) +
-  geom_violin() +  # Add violin plot
-  geom_point(position = position_jitter(width = 0.2), size = 2, alpha = 0.4) +  # Add swarm plot
+ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = region)) +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Region") +  # Customize legend title
+  #ggtitle("Province Connectivity") +
   labs(x = "Province", y = "Mean Fws per Individual") +
-  theme_minimal()+
-  guides(fill = FALSE)
+  guides(color = FALSE) 
+
 
 ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
-  geom_violin() +  # Add violin plot
-  geom_point(position = position_jitter(width = 0.2), size = 2, alpha = 0.4) +  # Add swarm plot
-  labs(x = "Region", y = "Mean Fws per Individual") +
-  theme_minimal()+
-  guides(fill = FALSE)
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(x = "", y = "Mean Fws per Individual") +
+  guides(fill = FALSE, color = FALSE) 
 
 
 # STATISTICAL ANALYSES:::     CHECK CAREFULLY!!!!!
@@ -1041,11 +1052,11 @@ ggplot(combined_data_province, aes(x = He_province)) +
 
 
 ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
-  geom_violin(alpha =0.7) +  # Add violin plot
-  ggbeeswarm::geom_beeswarm() +
-  labs(x = "Region", y = "Mean Fws per Individual") +
+  geom_violin(width = 1, aes(color = province), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = province), fill = "white", alpha = 0.4) +
+  labs(x = "", y = "Mean genome-wide He") +
   theme_minimal()+
-  guides(fill = FALSE)
+  guides(fill = FALSE, color =FALSE)
 
 
 #ggsave("mean_he_province_distros.png", ph, width = 14, height = 10, bg = "white")
@@ -1067,11 +1078,11 @@ ggplot(combined_data_region, aes(x = He_region)) +
   theme_minimal()
 
 ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
-  geom_violin() +  # Add violin plot
-  ggbeeswarm::geom_beeswarm(dodge.width = 0.5) +
-  labs(x = "Region", y = "Mean Fws per Individual") +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  labs(x = "", y = "Mean Genome-wide He") +
   theme_minimal()+
-  guides(fill = FALSE)
+  guides(fill = FALSE, color =FALSE)
 
 
 ########################
@@ -1498,8 +1509,8 @@ sorted_df$conn_provinces <- factor(sorted_df$conn_provinces, levels = median_dat
 
 # Plot with legend and sorted x-axis
 ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
-  geom_violin(width = 1) +
-  geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
+  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
   theme_minimal() +
   theme(
     plot.title = element_text(size = 11), 
@@ -1508,7 +1519,8 @@ ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
   scale_fill_discrete(name = "Province") +  # Customize legend title
   ggtitle("Province Connectivity") +
   xlab("")+
-  ylab("IBD")
+  ylab("IBD")+
+  guides(color =FALSE)
 
 
 ## REGIONS CONNECTIVITY
@@ -1524,8 +1536,8 @@ sorted_df$conn_regions <- factor(sorted_df$conn_regions, levels = median_data[or
 
 # Plot with legend and sorted x-axis
 ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
-  geom_violin(width = 1) +
-  geom_boxplot(width = 0.1, color = "black", alpha = 0.2) +
+  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
   theme_minimal() +
   theme(
     plot.title = element_text(size = 11), 
@@ -1534,7 +1546,7 @@ ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
   ggtitle("Region Connectivity") +
   xlab("")+
   ylab("IBD")+
-  guides(fill = FALSE) 
+  guides(color = FALSE) 
 
 
 # pairwise proportions of related infections #
