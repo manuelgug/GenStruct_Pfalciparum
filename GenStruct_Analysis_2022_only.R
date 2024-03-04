@@ -30,7 +30,7 @@ library(Rtsne)
 # Refs: Arnau; Brokhattingen et al, preprint; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4; Kattenberg et al https://doi.org/10.1128/spectrum.00960-22; Gerlovina et al, Genetics 2022
 
 # c) Determine clonal emergence vs spread from other regions for parasites carrying VOC (dhps581 and dhps436)
-# • Map parasites with VOC on PCA (color)
+# • Map parasites with VOC on PCA (color) ✔
 # • Determine pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
 # Refs: daSilva et al, https://doi.org/10.1038/s42003-023-04997-7; Fola et al, Nature https://doi.org/10.1038/s41564-023-01461-4
 
@@ -1117,6 +1117,11 @@ raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2,
                                    VOC = combined_df_merged$VOC))
 
 
+#remove Dry
+raref_input <- raref_input %>%
+  filter(!grepl("Dry", province))
+
+
 # ## PICK LOCI WITH HIGHER He for multivariate analyses::: MAKES WORSE PLOTS
 # 
 # # 1) calculate heterozygosity of the population (He); pop = province, region
@@ -1191,6 +1196,9 @@ rearranged <- replace(rearranged, is.na(rearranged), 0)
 NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
 pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region, VOC)
 
+pca_labels <- pca_labels %>%
+  filter(!grepl("Dry", province))
+
 if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
   print("Order of categorical variables is ok.")
 }else{
@@ -1212,7 +1220,7 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
   mutate_all(as.numeric)
  
 
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
 #PCA
@@ -1612,10 +1620,6 @@ ggplot(ibd_samples_provinces, aes(x = pairwise_comparison, y = perc_ibd_samples_
   labs(x = "", y = "proportion of samples") +
   ggtitle("proportion of significantly related IBD samples")+
   guides(color = FALSE) 
-
-
-
-
 
 
 #calculate percentages for regions
