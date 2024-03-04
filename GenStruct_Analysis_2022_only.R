@@ -1664,6 +1664,38 @@ ggplot(ibd_samples_regions, aes(x = pairwise_comparison, y = perc_ibd_samples_pa
   guides(color = FALSE, fill =FALSE) 
 
 
+#pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
+
+#remove "no_genotype" category
+sorted_df_full_geno <- sorted_df[sorted_df$VOC_s1 != "no_genotype",]
+sorted_df_full_geno <- sorted_df_full_geno[sorted_df_full_geno$VOC_s2 != "no_genotype",]
+
+#mean IBD for each pair of genotypes for each pairwise comparison
+sorted_df_full_geno_summary <- sorted_df_full_geno %>% 
+  group_by(conn_provinces, pairwise_geno = paste0(VOC_s1, "_", VOC_s2)) %>% 
+  summarize(IBD = estimate) %>%
+  mutate(geno = ifelse(grepl("WT", pairwise_geno), "WT_vs_res", "res_vs_res")) ## THERE'S ONLY 1 WT SAMPLE, FROM SOFALA
+
+ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) + # fill = pairwise_geno if i want ALL genotypes 1 by 1
+  geom_boxplot() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "IBD") +
+  ggtitle("IBD by Connection Provinces and Pairwise Genotype")
+
+
+sorted_df_full_geno_summary_WT_only<- sorted_df_full_geno_summary %>%
+  filter(grepl("Sofala", conn_provinces))
+
+ggplot(sorted_df_full_geno_summary_WT_only, aes(x = pairwise_geno, y = IBD, fill = pairwise_geno)) +
+  geom_boxplot() +
+  facet_wrap(~ conn_provinces, scales = "free", nrow = 3) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "IBD") +
+  ggtitle("IBD by Connection Provinces and Pairwise Genotype")+
+  guides(color = FALSE, fill =FALSE) 
+
 
 
 ##############################
