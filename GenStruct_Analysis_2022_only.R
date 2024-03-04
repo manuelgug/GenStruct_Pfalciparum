@@ -1526,16 +1526,16 @@ ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
 ## REGIONS CONNECTIVITY
 
 #remove Dry because it should not be incldued in Regions comparison
-sorted_df<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
+sorted_df_nodry<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
 
 # Calculate the median for each group
-median_data <- aggregate(estimate ~ conn_regions, sorted_df, median)
+median_data <- aggregate(estimate ~ conn_regions, sorted_df_nodry, median)
 
 # Reorder conn_regions based on the median values in descending order
-sorted_df$conn_regions <- factor(sorted_df$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
+sorted_df_nodry$conn_regions <- factor(sorted_df_nodry$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
 
 # Plot with legend and sorted x-axis
-ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
+ggplot(sorted_df_nodry, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
   geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -1546,7 +1546,7 @@ ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
   ggtitle("Region Connectivity") +
   xlab("")+
   ylab("IBD")+
-  guides(color = FALSE) 
+  guides(color = FALSE, fill =FALSE) 
 
 
 # pairwise proportions of related infections #
@@ -1554,6 +1554,7 @@ ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
 #number of pairwise significantly related (IBD) infections for provinces and regions
 table(sorted_df$conn_provinces)
 table(sorted_df$conn_regions)
+
 
 #sample sizes
 sample_size_provinces <- combined_df_merged %>%
@@ -1569,11 +1570,94 @@ sample_size_regions <- combined_df_merged %>%
 sample_size_regions
 
 
-n_choose_k <- function(n, k=2) { # k = 2 is for paiwrise
-  return(factorial(n) / (factorial(k) * factorial(n - k)))
-}
+#calculate percentages for provinces
+ibd_samples_provinces <- sorted_df %>%
+  group_by(paste0(province_s1, "_", province_s2)) %>%
+  summarize(ibd_samples = length(unique(c(sample1, sample2))),
+            province_s1 = province_s1,
+            province_s2 = province_s2) %>%
+  distinct()
 
-sapply(sample_size_provinces$unique_NIDA2_count, n_choose_k, k = 2)
+ibd_samples_provinces <- ibd_samples_provinces[,-1]
+
+ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s1", by.y = "province")
+colnames(ibd_samples_provinces)[4] <- "province_s1_ss"
+  
+ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s2", by.y = "province")
+colnames(ibd_samples_provinces)[5] <- "province_s2_ss"
+
+ibd_samples_provinces$total_samples_pairwise <- ifelse(ibd_samples_provinces$province_s1 != ibd_samples_provinces$province_s2, rowSums(ibd_samples_provinces[c("province_s1_ss", "province_s2_ss")]), ibd_samples_provinces$province_s1_ss)
+
+ibd_samples_provinces$perc_ibd_samples_pairwise <- ibd_samples_provinces$ibd_samples / ibd_samples_provinces$total_samples_pairwise
+
+ibd_samples_provinces$pairwise_comparison <- paste0(ibd_samples_provinces$province_s1, "_", ibd_samples_provinces$province_s2)
+
+# Assuming ibd_samples_regions is your data frame
+ibd_samples_provinces <- ibd_samples_provinces %>%
+  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
+
+# Reorder the levels of the pairwise_comparison factor
+ibd_samples_provinces$pairwise_comparison <- factor(ibd_samples_provinces$pairwise_comparison, 
+                                                  levels = ibd_samples_provinces$pairwise_comparison)
+
+ibd_samples_provinces <- merge(ibd_samples_provinces, sorted_df[c("conn_provinces", "conn_regions")], by.x = "pairwise_comparison", by.y = "conn_provinces")
+
+ibd_samples_provinces <- distinct(ibd_samples_provinces)
+
+# Create the bar plot
+ggplot(ibd_samples_provinces, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = conn_regions)) +
+  geom_bar(stat = "identity", alpha =0.7) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "", y = "proportion of samples") +
+  ggtitle("proportion of significantly related IBD samples")+
+  guides(color = FALSE) 
+
+
+
+
+
+
+#calculate percentages for regions
+ibd_samples_regions <- sorted_df %>%
+  group_by(paste0(region_s1, "_", region_s2)) %>%
+  summarize(ibd_samples = length(unique(c(sample1, sample2))),
+            region_s1 = region_s1,
+            region_s2 = region_s2) %>%
+  distinct()
+
+ibd_samples_regions <- ibd_samples_regions[,-1]
+
+ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s1", by.y = "region")
+ibd_samples_regions <- ibd_samples_regions[,-4]
+colnames(ibd_samples_regions)[4] <- "region_s1_ss"
+
+ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s2", by.y = "region")
+ibd_samples_regions <- ibd_samples_regions[,-5]
+colnames(ibd_samples_regions)[5] <- "region_s2_ss"
+
+ibd_samples_regions$total_samples_pairwise <- ifelse(ibd_samples_regions$region_s1 != ibd_samples_regions$region_s2, rowSums(ibd_samples_regions[c("region_s1_ss", "region_s2_ss")]), ibd_samples_regions$region_s1_ss)
+
+ibd_samples_regions$perc_ibd_samples_pairwise <- ibd_samples_regions$ibd_samples / ibd_samples_regions$total_samples_pairwise
+
+ibd_samples_regions$pairwise_comparison <- paste0(ibd_samples_regions$region_s1, "_", ibd_samples_regions$region_s2)
+
+# Assuming ibd_samples_regions is your data frame
+ibd_samples_regions <- ibd_samples_regions %>%
+  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
+
+# Reorder the levels of the pairwise_comparison factor
+ibd_samples_regions$pairwise_comparison <- factor(ibd_samples_regions$pairwise_comparison, 
+                                                  levels = ibd_samples_regions$pairwise_comparison)
+
+# Create the bar plot
+ggplot(ibd_samples_regions, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = perc_ibd_samples_pairwise)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Pairwise Comparison", y = "Percentage of IBD Samples") +
+  ggtitle("Percentage of IBD Samples by Pairwise Comparison")+
+  guides(color = FALSE, fill =FALSE) 
 
 
 
