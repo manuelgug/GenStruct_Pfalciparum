@@ -968,7 +968,10 @@ prov_fws
 
 ggsave("province_fws.png", prov_fws, width = 8, height = 6, bg = "white")
 
-reg_fws <- ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
+mean_Fws_per_individual_nodry <- mean_Fws_per_individual %>%
+  filter(!grepl("Dry", province))
+
+reg_fws <- ggplot(mean_Fws_per_individual_nodry, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -983,7 +986,7 @@ reg_fws
 
 ggsave("region_fws.png", reg_fws, width = 8, height = 6, bg = "white")
 
-# STATISTICAL ANALYSES:::     CHECK CAREFULLY!!!!!
+# STATISTICAL ANALYSES
 # Filter data by province and region
 combined_data_province <- rbind(data.frame(He_province = processed_He_results[processed_He_results$geo == "province", ]$post_stat_mean, 
                                            province = processed_He_results[processed_He_results$geo == "province", ]$population))
