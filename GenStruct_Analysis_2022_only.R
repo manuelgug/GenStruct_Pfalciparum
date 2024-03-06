@@ -307,7 +307,7 @@ combined_df_merged <- combined_df_merged[combined_df_merged$year == 2022,]
 # 1) MAF filering (< 0.01)
 combined_df_merged <- combined_df_merged[combined_df_merged$norm.reads.locus  > 0.01, ]
 
-# 2) check for coverage (>50 loci with >threshold reads)
+# 2) check for coverage (>100 loci with >threshold reads)
 # Define thresholds for read depth
 thresholds <- c(25, 50, 100, 200)
 count_list <- list()
@@ -327,7 +327,7 @@ for (threshold in thresholds) {
 
 result_df <- Reduce(function(x, y) left_join(x, y, by = "NIDA2"), count_list)
 
-#count cells above 100 for each column with the "unique" substring: here, i'm calculating the sample size for each reads count threshold using 50 loci as cutoff: samples with <50 read count per loci below the threshold should be removed
+#count cells above 100 for each column with the "unique" substring: here, i'm calculating the sample size for each reads count threshold using 100 loci as cutoff: samples with <100 read count per loci below the threshold should be removed
 count_above_100 <- function(x) sum(x >= 100, na.rm = TRUE)
 unique_columns <- grep("unique", colnames(result_df), value = TRUE)
 
@@ -423,7 +423,157 @@ sample_size_regions
 ######################################################################
 
 #######################################################
-# 5.- calculate MOI and eMOI for each run
+# 5.- SUFFICIENCY OF SAMPLINGS
+#######################################################
+
+#ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
+
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
+
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                                   year = combined_df_merged$year, 
+                                   province = combined_df_merged$province,
+                                   region = combined_df_merged$region,
+                                   locus = combined_df_merged$locus,
+                                   n.alleles = combined_df_merged$n.alleles,
+                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
+                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
+                                   run_id = combined_df_merged$run_id))
+
+# PROVINCE
+
+# Initialize a list to store the rarefaction curves for each year
+accum_curves_2022 <- list()
+
+# Get unique years and provinces
+unique_provinces <- unique(raref_input$province)
+
+# Iterate over each province
+for (province in unique_provinces) {
+  
+  print(province)
+  
+  # Subsetting the data for 2022
+  sub_2022 <- raref_input[raref_input$year == 2022 & raref_input$province == province, ]
+  
+  # Check if there are unique NIDA2s for 2022
+  if (length(unique(sub_2022$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2022
+    unique_alleles_2022 <- list()
+    
+    # Iterate over each unique NIDA2 for 2022
+    for (nida in unique(sub_2022$NIDA2)) {
+      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2022
+    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2022
+    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
+      as.integer(all_unique_alleles_2022 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2022
+    presence_df_2022 <- as.data.frame(presence_matrix_2022)
+    presence_df_2022 <- t(presence_df_2022)
+    rownames(presence_df_2022) <- names(unique_alleles_2022)
+    colnames(presence_df_2022) <- all_unique_alleles_2022
+    
+    # CALCULATE CURVE for 2022
+    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
+    accum_curves_2022[[province]] <- accum_curve_2022
+  }
+}
+
+# Select 9 colors from the Paired palette
+colors <- brewer.pal(11, "Paired")
+
+pdf("accumulation_curves_provinces.pdf", width = 12, height = 8)
+
+# Plot the curves for 2022
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", ylab ="Alleles", main = "Allele Accumulation Curves per Province", xlim = c(0,130), ylim = c(0,1800))
+for (i in 2:length(accum_curves_2022)) {
+  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
+}
+legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.7)
+
+dev.off()
+#conclusion....
+
+raref_input_region <- raref_input[!(raref_input$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
+
+# REGION
+
+# Initialize a list to store the rarefaction curves for each year
+accum_curves_2022 <- list()
+
+# Get unique years and provinces
+unique_provinces <- unique(raref_input_region$region)
+
+# Iterate over each region
+for (region in unique_provinces) {
+  
+  print(region)
+  
+  # Subsetting the data for 2022
+  sub_2022 <- raref_input_region[raref_input_region$year == 2022 & raref_input_region$region == region, ]
+  
+  # Check if there are unique NIDA2s for 2022
+  if (length(unique(sub_2022$NIDA2)) > 0) {
+    # Initialize a list to store unique alleles for each NIDA2 for 2022
+    unique_alleles_2022 <- list()
+    
+    # Iterate over each unique NIDA2 for 2022
+    for (nida in unique(sub_2022$NIDA2)) {
+      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
+      unique_alleles_it <- unique(subset_data$allele)
+      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
+    }
+    
+    # Get unique alleles across all elements for 2022
+    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
+    
+    # Create a matrix to store presence/absence of unique alleles for each element for 2022
+    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
+      as.integer(all_unique_alleles_2022 %in% x)
+    })
+    
+    # Convert the matrix to a dataframe for 2022
+    presence_df_2022 <- as.data.frame(presence_matrix_2022)
+    presence_df_2022 <- t(presence_df_2022)
+    rownames(presence_df_2022) <- names(unique_alleles_2022)
+    colnames(presence_df_2022) <- all_unique_alleles_2022
+    
+    # CALCULATE CURVE for 2022
+    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
+    accum_curves_2022[[region]] <- accum_curve_2022
+  }
+}
+
+# Select 3 colors from the Paired palette
+colors <- brewer.pal(3, "Paired")
+
+pdf("accumulation_curves_regions.pdf", width = 12, height = 8)
+
+# Plot the curves for 2022
+plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", ylab ="Alleles", main = "Allele Accumulation Curves per Region", xlim = c(0,350), ylim = c(0,2700))
+for (i in 2:length(accum_curves_2022)) {
+  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
+}
+legend(x = 310, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.7)
+
+dev.off()
+
+
+#######################################################
+# 6.- calculate MOI and eMOI for each run
 #######################################################
 
 combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS") 
@@ -447,7 +597,7 @@ mcmc_results <- moire::run_mcmc(
   thin = 10); saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
 
 #######################################################
-# 5.- Present MOI/eMOI results overall and means per province and region for each year
+# 7.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
 mcmc_results <- readRDS("FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
@@ -520,7 +670,7 @@ a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   guides(fill = FALSE) 
 
 a
-#ggsave("naive_coi_provinces_ditros.png", a, width = 14, height = 6, bg = "white")
+ggsave("naive_coi_provinces_ditros.png", a, width = 14, height = 6, bg = "white")
 
 
 b <- ggplot(coi_results_region, aes(x = naive_coi, fill = region)) +
@@ -535,6 +685,8 @@ b <- ggplot(coi_results_region, aes(x = naive_coi, fill = region)) +
 
 b
 
+ggsave("naive_coi_regions_ditros.png", b, width = 10, height = 6, bg = "white")
+
 c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_wrap(~ province , scales = "fixed", nrow = 1) + 
@@ -546,6 +698,8 @@ c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
   guides(fill = FALSE) 
 
 c
+
+ggsave("ecoi_provinces_ditros.png", c, width = 14, height = 6, bg = "white")
 
 d <- ggplot(coi_results_region, aes(x = post_effective_coi_med, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
@@ -559,6 +713,7 @@ d <- ggplot(coi_results_region, aes(x = post_effective_coi_med, fill = region)) 
 
 d
 
+ggsave("ecoi_regions_ditros.png", d, width = 10, height = 6, bg = "white")
 
 e <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = region)) +
   geom_bar(stat = "identity", position = "dodge") +
@@ -569,6 +724,7 @@ e <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percent
   guides(fill = FALSE) 
 e
 
+ggsave("perc_polyclonal_regions.png", e, width = 8, height = 6, bg = "white")
 
 f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = province))+
   geom_bar(stat = "identity", position = "dodge") +
@@ -578,161 +734,17 @@ f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_per
   theme_minimal()+
   guides(fill = FALSE) 
 f
-#ggsave("perc_polyclonal_provinces.png", f, width = 14, height = 10, bg = "white")
+ggsave("perc_polyclonal_provinces.png", f, width = 10, height = 8, bg = "white")
 
-
-################################### 
-#ACCUMULATION CURVES (read this https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4885658/; ver genotype_curve de paquete poppr?)
-
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-
-raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-                                    year = combined_df_merged$year, 
-                                    province = combined_df_merged$province,
-                                    region = combined_df_merged$region,
-                                    locus = combined_df_merged$locus,
-                                    n.alleles = combined_df_merged$n.alleles,
-                                    norm.reads.locus = combined_df_merged$norm.reads.locus,
-                                    allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
-                                    run_id = combined_df_merged$run_id))
-
-# PROVINCE
-
-# Initialize a list to store the rarefaction curves for each year
-accum_curves_2022 <- list()
-
-# Get unique years and provinces
-unique_provinces <- unique(raref_input$province)
-
-# Iterate over each province
-for (province in unique_provinces) {
-  
-  print(province)
-  
-  # Subsetting the data for 2022
-  sub_2022 <- raref_input[raref_input$year == 2022 & raref_input$province == province, ]
-  
-  # Check if there are unique NIDA2s for 2022
-  if (length(unique(sub_2022$NIDA2)) > 0) {
-    # Initialize a list to store unique alleles for each NIDA2 for 2022
-    unique_alleles_2022 <- list()
-    
-    # Iterate over each unique NIDA2 for 2022
-    for (nida in unique(sub_2022$NIDA2)) {
-      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
-      unique_alleles_it <- unique(subset_data$allele)
-      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
-    }
-    
-    # Get unique alleles across all elements for 2022
-    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
-    
-    # Create a matrix to store presence/absence of unique alleles for each element for 2022
-    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
-      as.integer(all_unique_alleles_2022 %in% x)
-    })
-    
-    # Convert the matrix to a dataframe for 2022
-    presence_df_2022 <- as.data.frame(presence_matrix_2022)
-    presence_df_2022 <- t(presence_df_2022)
-    rownames(presence_df_2022) <- names(unique_alleles_2022)
-    colnames(presence_df_2022) <- all_unique_alleles_2022
-    
-    # CALCULATE CURVE for 2022
-    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
-    accum_curves_2022[[province]] <- accum_curve_2022
-  }
-}
-
-# Select 9 colors from the Paired palette
-colors <- brewer.pal(11, "Paired")
-
-#pdf("accumulation_curves_provinces.pdf", width = 12, height = 8)
-
-# Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Allele Accumulation Curves per Province", xlim = c(0,130), ylim = c(0,1800))
-for (i in 2:length(accum_curves_2022)) {
-  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
-}
-legend(x = 110, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.7)
-
-#dev.off()
-#conclusion....
-
-raref_input_region <- raref_input[!(raref_input$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
-
-# REGION
-
-# Initialize a list to store the rarefaction curves for each year
-accum_curves_2022 <- list()
-
-# Get unique years and provinces
-unique_provinces <- unique(raref_input_region$region)
-
-# Iterate over each region
-for (region in unique_provinces) {
-  
-  print(region)
-  
-  # Subsetting the data for 2022
-  sub_2022 <- raref_input_region[raref_input_region$year == 2022 & raref_input_region$region == region, ]
-  
-  # Check if there are unique NIDA2s for 2022
-  if (length(unique(sub_2022$NIDA2)) > 0) {
-    # Initialize a list to store unique alleles for each NIDA2 for 2022
-    unique_alleles_2022 <- list()
-    
-    # Iterate over each unique NIDA2 for 2022
-    for (nida in unique(sub_2022$NIDA2)) {
-      subset_data <- sub_2022[sub_2022$NIDA2 == nida, ]
-      unique_alleles_it <- unique(subset_data$allele)
-      unique_alleles_2022[[as.character(nida)]] <- unique_alleles_it
-    }
-    
-    # Get unique alleles across all elements for 2022
-    all_unique_alleles_2022 <- unique(unlist(unique_alleles_2022))
-    
-    # Create a matrix to store presence/absence of unique alleles for each element for 2022
-    presence_matrix_2022 <- sapply(unique_alleles_2022, function(x) {
-      as.integer(all_unique_alleles_2022 %in% x)
-    })
-    
-    # Convert the matrix to a dataframe for 2022
-    presence_df_2022 <- as.data.frame(presence_matrix_2022)
-    presence_df_2022 <- t(presence_df_2022)
-    rownames(presence_df_2022) <- names(unique_alleles_2022)
-    colnames(presence_df_2022) <- all_unique_alleles_2022
-    
-    # CALCULATE CURVE for 2022
-    accum_curve_2022 <- specaccum(presence_df_2022, 'random', permutations = 100)
-    accum_curves_2022[[region]] <- accum_curve_2022
-  }
-}
-
-# Select 3 colors from the Paired palette
-colors <- brewer.pal(3, "Paired")
-
-# Plot the curves for 2022
-plot(accum_curves_2022[[1]], col = colors[1], xlab = "Samples", main = "Accumulation Curves for 2022 (per Region)", xlim = c(0,350), ylim = c(0,2700))
-for (i in 2:length(accum_curves_2022)) {
-  lines(accum_curves_2022[[i]], col = colors[i], lw = 1.5)
-}
-legend(x = 310, y = 950, legend = names(accum_curves_2022), fill = colors, x.intersp = 0.7, y.intersp = 0.5)
 
 #######################################################
-# 9.- calculate He for each population (per region/province)
+# 8.- calculate He for each population (per region/province)
 #######################################################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
 combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-
 
 # RUN IN CLUSTER:
 # Define function to run MOIRE and save results
@@ -796,7 +808,7 @@ for (i in seq_along(data_frames)) {
 }
 
 #######################################################
-# 10.- He and Fws results 
+# 9.- He and Fws results 
 #######################################################
 
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
@@ -936,7 +948,7 @@ regions <- c("North", "Centre", "South")
 mean_Fws_per_individual$province <- factor(mean_Fws_per_individual$province, levels = provinces)
 mean_Fws_per_individual$region <- factor(mean_Fws_per_individual$region, levels = regions)
 
-ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = region)) +
+prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -946,11 +958,14 @@ ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, f
   ) +
   scale_fill_discrete(name = "Region") +  # Customize legend title
   #ggtitle("Province Connectivity") +
-  labs(x = "Province", y = "Mean Fws per Individual") +
+  labs(x = "Province", y = "Genome-wide 1-Fws") +
   guides(color = FALSE) 
 
+prov_fws
 
-ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
+ggsave("province_fws.png", prov_fws, width = 8, height = 6, bg = "white")
+
+reg_fws <- ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -958,9 +973,12 @@ ggplot(mean_Fws_per_individual, aes(x = region, y = mean_indiv_fws_region, fill 
     plot.title = element_text(size = 11), 
     axis.text.x = element_text(angle = 45, hjust = 1)
   ) +
-  labs(x = "", y = "Mean Fws per Individual") +
+  labs(x = "", y = "Genome-wide 1-Fws") +
   guides(fill = FALSE, color = FALSE) 
 
+reg_fws
+
+ggsave("region_fws.png", reg_fws, width = 8, height = 6, bg = "white")
 
 # STATISTICAL ANALYSES:::     CHECK CAREFULLY!!!!!
 # Filter data by province and region
@@ -1040,26 +1058,32 @@ mean_data <- combined_data_province %>%
   summarize(mean_He = mean(He_province, na.rm = TRUE),
             median_He = median(He_province, na.rm = TRUE))
 
-ggplot(combined_data_province, aes(x = He_province)) +
+p1 <- ggplot(combined_data_province, aes(x = He_province)) +
   geom_histogram(alpha = 0.7, bins = 30) +
   geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
   geom_vline(data = mean_data, aes(xintercept = median_He), linetype = "solid", color = "orange") +
   labs(title = "Province Heterozygosity",
-       x = "He",
+       x = "Genome-wide He",
        y = "Frequency") +
   facet_wrap(~ province) +
   theme_minimal()
 
+p1
 
-ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
+p2 <- ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
   geom_violin(width = 1, aes(color = province), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = province), fill = "white", alpha = 0.4) +
-  labs(x = "", y = "Mean genome-wide He") +
-  theme_minimal()+
-  guides(fill = FALSE, color =FALSE)
+  labs(x = "", y = "Genome-wide He") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Adjust x-axis label angle
+  guides(fill = FALSE, color = FALSE)
 
+p2
 
-#ggsave("mean_he_province_distros.png", ph, width = 14, height = 10, bg = "white")
+library(cowplot)
+combined_plot_prov <- plot_grid(p1, p2, ncol = 2)
+
+ggsave("province_He.png", combined_plot, width = 16, height = 8, bg = "white")
 
 #regions
 mean_data_region <- combined_data_region %>%
@@ -1067,7 +1091,7 @@ mean_data_region <- combined_data_region %>%
   summarize(mean_He = mean(He_region, na.rm = TRUE),
             median_He = median(He_region, na.rm = TRUE))
 
-ggplot(combined_data_region, aes(x = He_region)) +
+p3 <- ggplot(combined_data_region, aes(x = He_region)) +
   geom_histogram(alpha = 0.7, bins = 30) +
   geom_vline(data = mean_data_region, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
   geom_vline(data = mean_data_region, aes(xintercept = median_He), linetype = "solid", color = "orange") +
@@ -1077,732 +1101,24 @@ ggplot(combined_data_region, aes(x = He_region)) +
   facet_wrap(~ region) +
   theme_minimal()
 
-ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
+p3
+
+p4 <- ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   labs(x = "", y = "Mean Genome-wide He") +
   theme_minimal()+
   guides(fill = FALSE, color =FALSE)
 
+p4
 
-########################
-###### PCA ########
-########################
+combined_plot_region <- plot_grid(p3, p4, ncol = 2)
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-#add VOC
-combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
-combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
-  
-combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
-                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
-                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
-
-combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
-
-#input for multivariate analyses
-raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
-                                   year = combined_df_merged$year, 
-                                   province = combined_df_merged$province,
-                                   region = combined_df_merged$region,
-                                   locus = combined_df_merged$locus,
-                                   n.alleles = combined_df_merged$n.alleles,
-                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
-                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
-                                   run_id = combined_df_merged$run_id,
-                                   VOC = combined_df_merged$VOC))
-
-
-#remove Dry
-raref_input <- raref_input %>%
-  filter(!grepl("Dry", province))
-
-
-# ## PICK LOCI WITH HIGHER He for multivariate analyses::: MAKES WORSE PLOTS
-# 
-# # 1) calculate heterozygosity of the population (He); pop = province, region
-# #import everything into lists
-# rds_files <- list.files(pattern = "\\MOIRE-RESULTS.RDS$", full.names = TRUE)
-# rds_files <- rds_files[!rds_files %in% "./all__samples_no_further_filtering_MOIRE-RESULTS.RDS"] #check name for later, may not even be needed.
-# 
-# 
-# # Load each RDS file into the list with the file name as the list name
-# He_results_list <- list()
-# 
-# for (file in rds_files) {
-#   print(file)
-#   file_name <- tools::file_path_sans_ext(basename(file))
-#   He_results_list[[file_name]] <- readRDS(file)
-# }
-# 
-# # Loop through each element in He_results_list
-# processed_He_results <- data.frame()
-# 
-# for (i in seq_along(He_results_list)) {
-#   
-#   # Summarize He
-#   He_results <- moire::summarize_he(He_results_list[[i]])
-#   He_results$population <- names(He_results_list[i])
-#   
-#   # Add the processed He results to the list
-#   processed_He_results <- rbind(processed_He_results, He_results)
-# }
-# 
-# #formatting categories
-# processed_He_results$population <- gsub("_MOIRE-RESULTS", "", processed_He_results$population)
-# 
-# library(stringr)
-# processed_He_results <- processed_He_results %>%
-#   mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"),
-#          year = substr(population, nchar(population) - 3, nchar(population)))
-# 
-# processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
-# processed_He_results$year <- as.numeric(processed_He_results$year)
-# 
-# ## pick and sort loci by He
-# loci_He <- processed_He_results %>% 
-#   group_by(locus) %>%
-#   summarize(mean_He = mean(post_stat_mean))%>%
-#   arrange(desc(mean_He))
-# 
-# #keep loci He > 0.7 
-# loci_to_keep_He <- loci_He[loci_He$mean_He >= 0.0,]$locus
-# raref_input <- raref_input[raref_input$locus %in% loci_to_keep_He, ]
-
-
-# Melt the data frame to convert it from wide to long format
-melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
-melted<-melted[,-3]
-
-library(tidyr)
-
-rearranged <- melted %>%
-  pivot_wider(
-    names_from = value,
-    values_from = norm.reads.locus
-  )
-
-# format
-rearranged <- as.data.frame(rearranged)
-rownames(rearranged) <- rearranged$NIDA2
-rearranged <- rearranged[, -1]
-rearranged <- replace(rearranged, is.na(rearranged), 0)
-
-#pca labels:
-NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
-pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region, VOC)
-
-pca_labels <- pca_labels %>%
-  filter(!grepl("Dry", province))
-
-if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
-  print("Order of categorical variables is ok.")
-}else{
-  "grab a coffee."
-}
-
-# format freq df
-rearranged <- rearranged %>%
-  mutate_all(as.numeric)
-
-zero_cols <- sapply(rearranged, function(x) all(x == 0))
-rearranged_filtered <- rearranged[, !zero_cols]
-
-# Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
-rearranged_pres_abs <- rearranged %>%
-    mutate_all(~ ifelse(. > 0, 1, .))
-
-rearranged_pres_abs <- rearranged_pres_abs %>%
-  mutate_all(as.numeric)
- 
-
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-#PCA
-pca_result <- prcomp(rearranged, scale. = F)
-
-# Extract the principal component scores
-pcs <- as.data.frame(pca_result$x)
-
-# Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# Calculate percentage variance explained by each principal component
-pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
-
-# Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$VOC))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-# Perform PCA prsence/absence
-pca_result <- prcomp(rearranged_pres_abs, scale. = F)
-
-# Extract the principal component scores
-pcs <- as.data.frame(pca_result$x)
-
-# Combine principal component scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# Calculate percentage variance explained by each principal component
-pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
-
-# Create the plot
-ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pca_labels$VOC))) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "",
-       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
-       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-#PCoA
-library(vegan)  # For the vegdist() function
-library(ape)    # For the pcoa() function
-library(ggplot2)
-
-# Compute Bray-Curtis dissimilarity matrix
-bray_curtis_dist <- vegdist(rearranged, method = "bray")
-
-# Perform PCoA
-pcoa_result <- pcoa(bray_curtis_dist)
-
-# Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$vectors)
-
-# Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# # Plot PCoA
-# pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
-
-ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
-  geom_point(size = 4, alpha = 0.7) +
-  # labs(title = "",
-  #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-  #      y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-#ggsave("pcoa_sample_freqs.png", pc, width = 12, height = 10, bg = "white")
-
-#PCoA presence/absence
-
-# Compute Bray-Curtis dissimilarity matrix
-bray_curtis_dist <- vegdist(rearranged_pres_abs, method = "bray")
-
-# Perform PCoA
-pcoa_result <- pcoa(bray_curtis_dist)
-
-# Extract the principal coordinate scores
-pcs <- as.data.frame(pcoa_result$vectors)
-
-# Combine principal coordinate scores with region labels
-pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
-
-pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
-pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
-
-# # Plot PCoA
-# pc_variance <- pcoa_result$values / sum(pcoa_result$values) * 100
-
-ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
-  geom_point(size = 4, alpha = 0.7) +
-  # labs(title = "",
-  #      x = paste0("Axis 1: ", round(pc_variance[1], 2), "%\n"),
-  #      y = paste0("Axis 2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
-
-
-#TSNE
-set.seed(69)
-perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
-set.seed(69)
-tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
-
-# Convert t-SNE results to data frame
-tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
-tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
-tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
-
-# Order factors
-tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
-tsne_data_freqs$region <- factor(tsne_data_freqs$region, levels = regions)
-tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = provinces)
-tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
-
-# Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = VOC)) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "t-SNE of Genetic Content (allele frequency)",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
-
-#ggsave("tsne_sample_freqs.png", ts, width = 12, height = 10, bg = "white")
-
-# Plot t-SNE of presence/absence
-ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = VOC)) +
-  geom_point(size = 4, alpha = 0.7) +
-  labs(title = "t-SNE of Genetic Content (presence/absence of alleles)",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
-
-
-#######################################################
-# 7.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
-#######################################################
-
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-#add VOC
-combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
-combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
-
-combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
-                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
-                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
-
-combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
-
-library(dcifer)
-pardef <- par(no.readonly = TRUE)
-
-## 2022 samples ##
-#format data
-dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
-str(dsmp, list.len = 2)
-
-# format metadata
-meta <- unique(combined_df_merged[c("NIDA2", "region", "province")])
-meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
-
-#estimate naive coi
-lrank <- 2
-coi   <- getCOI(dsmp, lrank = lrank)
-min(coi)
-
-#estimate allele freqs
-afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
-str(afreq, list.len = 2)
-
-#order provinces from north to wouth
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-nsite     <- table(meta$province)[provinces]
-ord       <- order(factor(meta$province, levels = provinces))
-dsmp <- dsmp[ord]
-coi  <- coi[ ord]
-
-#calculate ibd
-dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
-                     alpha = 0.05, nr = 1e3)  
-
-# saveRDS(dres0_2022, "dres0_2022.RDS")
-# dres0_2022 <- readRDS("dres0_2022.RDS")
-
-pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
-
-layout(matrix(1:2, 1), width = c(15, 1))
-par(mar = c(1, 1, 2, 1))
-alpha <- 0.05         
-nsmp  <- length(dsmp)
-atsep <- cumsum(nsite)[-length(nsite)]
-isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
-dmat  <- dres0_2022[, , "estimate"]
-dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
-
-plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
-
-abline(v = atsep, h = atsep, col = "gray45", lty = 5)
-atclin <- cumsum(nsite) - nsite/2
-mtext(provinces, side = 3, at = atclin, line = 0.2)
-mtext(provinces, side = 2, at = atclin, line = 0.2)
-
-par(mar = c(1, 0, 2, 3))
-plotColorbar()
-
-dev.off()
-
-
-### EXAMINE PAIRS OF SAMPLES!
-str(dres0_2022)
-
-#extract info
-estimates_df <-as.data.frame(dres0_2022[1:924, 1:924, "estimate"])
-estimates_p <-as.data.frame(dres0_2022[1:924, 1:924, "p_value"])
-estimates_CI_lower <- as.data.frame(dres0_2022[1:924, 1:924, "CI_lower"])
-estimates_CI_upper <- as.data.frame(dres0_2022[1:924, 1:924, "CI_upper"])
-
-library(reshape2)
-#sort info into a single df
-
-estimates_df_long <- reshape2::melt(as.matrix(estimates_df))
-names(estimates_df_long) <- c("sample1", "sample2", "estimate")
-estimates_p_long <- reshape2::melt(as.matrix(estimates_p))
-names(estimates_p_long) <- c("sample1", "sample2", "p_value")
-estimates_CI_lower_long <- reshape2::melt(as.matrix(estimates_CI_lower))
-names(estimates_CI_lower_long) <- c("sample1", "sample2", "CI_lower")
-estimates_CI_upper_long <- reshape2::melt(as.matrix(estimates_CI_upper))
-names(estimates_CI_upper_long) <- c("sample1", "sample2", "CI_upper")
-
-merged_df <- merge(estimates_df_long, estimates_p_long, by = c("sample1", "sample2"))
-merged_df <- merge(merged_df, estimates_CI_lower_long, by = c("sample1", "sample2"))
-merged_df <- merge(merged_df, estimates_CI_upper_long, by = c("sample1", "sample2"))
-
-
-
-#saveRDS(merged_df, "dres0_2022_TABLE.RDS")
-merged_df <- readRDS("dres0_2022_TABLE.RDS")
-
-#remove NA rows
-merged_df <- merged_df[complete.cases(merged_df),]
-
-#keep significant cases
-merged_df_signif <- merged_df[merged_df$p_value < 0.05,]
-
-#merge with geo locations for each pair of samples compared
-merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample1", by.y = "NIDA2")
-colnames(merged_df_signif_geo)[7:9] <- c("province_s1", "region_s1", "VOC_s1")
-merged_df_signif_geo<- distinct(merged_df_signif_geo)
-
-merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample2", by.y = "NIDA2")
-colnames(merged_df_signif_geo)[10:12] <- c("province_s2", "region_s2", "VOC_s2")
-merged_df_signif_geo<- distinct(merged_df_signif_geo)
-
-combos_iniciales<- paste0(merged_df_signif[,1], merged_df_signif[,2])
-combos_finales<- paste0(merged_df_signif_geo[,1], merged_df_signif_geo[,2])
-
-#sanity check
-if (length(combos_finales %in% combos_finales) == dim(merged_df_signif_geo)[1]){
-  print("merge was successful.")
-} else{
-  print("grab a coffee.")
-}
-
-#make connectivity columns
-merged_df_signif_geo$conn_provinces <- paste0(merged_df_signif_geo$province_s1, "_", merged_df_signif_geo$province_s2)
-merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_", merged_df_signif_geo$region_s2)
-
-# Sort the data frame by estimate in descending order
-sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
-
-## PROVINCES CONNECTIVITY
-
-# Calculate the median for each group
-median_data <- aggregate(estimate ~ conn_provinces, sorted_df, median)
-
-# Reorder conn_regions based on the median values in descending order
-sorted_df$conn_provinces <- factor(sorted_df$conn_provinces, levels = median_data[order(-median_data$estimate), "conn_provinces"])
-
-# Plot with legend and sorted x-axis
-ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
-  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
-  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(size = 11), 
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  scale_fill_discrete(name = "Province") +  # Customize legend title
-  ggtitle("Province Connectivity") +
-  xlab("")+
-  ylab("IBD")+
-  guides(color =FALSE)
-
-
-## REGIONS CONNECTIVITY
-
-#remove Dry because it should not be incldued in Regions comparison
-sorted_df_nodry<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
-
-# Calculate the median for each group
-median_data <- aggregate(estimate ~ conn_regions, sorted_df_nodry, median)
-
-# Reorder conn_regions based on the median values in descending order
-sorted_df_nodry$conn_regions <- factor(sorted_df_nodry$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
-
-# Plot with legend and sorted x-axis
-ggplot(sorted_df_nodry, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
-  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
-  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(size = 11), 
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  ggtitle("Region Connectivity") +
-  xlab("")+
-  ylab("IBD")+
-  guides(color = FALSE, fill =FALSE) 
-
-
-# pairwise proportions of related infections #
-
-#number of pairwise significantly related (IBD) infections for provinces and regions
-table(sorted_df$conn_provinces)
-table(sorted_df$conn_regions)
-
-
-#sample sizes
-sample_size_provinces <- combined_df_merged %>%
-  group_by(province) %>%
-  summarise(unique_NIDA2_count = n_distinct(NIDA2))
-
-sample_size_provinces
-
-sample_size_regions <- combined_df_merged %>%
-  group_by(year, region) %>%
-  summarise(unique_NIDA2_count = n_distinct(NIDA2))
-
-sample_size_regions
-
-
-#calculate percentages for provinces
-ibd_samples_provinces <- sorted_df %>%
-  group_by(paste0(province_s1, "_", province_s2)) %>%
-  summarize(ibd_samples = length(unique(c(sample1, sample2))),
-            province_s1 = province_s1,
-            province_s2 = province_s2) %>%
-  distinct()
-
-ibd_samples_provinces <- ibd_samples_provinces[,-1]
-
-ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s1", by.y = "province")
-colnames(ibd_samples_provinces)[4] <- "province_s1_ss"
-  
-ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s2", by.y = "province")
-colnames(ibd_samples_provinces)[5] <- "province_s2_ss"
-
-ibd_samples_provinces$total_samples_pairwise <- ifelse(ibd_samples_provinces$province_s1 != ibd_samples_provinces$province_s2, rowSums(ibd_samples_provinces[c("province_s1_ss", "province_s2_ss")]), ibd_samples_provinces$province_s1_ss)
-
-ibd_samples_provinces$perc_ibd_samples_pairwise <- ibd_samples_provinces$ibd_samples / ibd_samples_provinces$total_samples_pairwise
-
-ibd_samples_provinces$pairwise_comparison <- paste0(ibd_samples_provinces$province_s1, "_", ibd_samples_provinces$province_s2)
-
-# Assuming ibd_samples_regions is your data frame
-ibd_samples_provinces <- ibd_samples_provinces %>%
-  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
-
-# Reorder the levels of the pairwise_comparison factor
-ibd_samples_provinces$pairwise_comparison <- factor(ibd_samples_provinces$pairwise_comparison, 
-                                                  levels = ibd_samples_provinces$pairwise_comparison)
-
-ibd_samples_provinces <- merge(ibd_samples_provinces, sorted_df[c("conn_provinces", "conn_regions")], by.x = "pairwise_comparison", by.y = "conn_provinces")
-
-ibd_samples_provinces <- distinct(ibd_samples_provinces)
-
-# Create the bar plot
-ggplot(ibd_samples_provinces, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = conn_regions)) +
-  geom_bar(stat = "identity", alpha =0.7) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(x = "", y = "proportion of samples") +
-  ggtitle("proportion of significantly related IBD samples")+
-  guides(color = FALSE) 
-
-
-#calculate percentages for regions
-ibd_samples_regions <- sorted_df %>%
-  group_by(paste0(region_s1, "_", region_s2)) %>%
-  summarize(ibd_samples = length(unique(c(sample1, sample2))),
-            region_s1 = region_s1,
-            region_s2 = region_s2) %>%
-  distinct()
-
-ibd_samples_regions <- ibd_samples_regions[,-1]
-
-ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s1", by.y = "region")
-ibd_samples_regions <- ibd_samples_regions[,-4]
-colnames(ibd_samples_regions)[4] <- "region_s1_ss"
-
-ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s2", by.y = "region")
-ibd_samples_regions <- ibd_samples_regions[,-5]
-colnames(ibd_samples_regions)[5] <- "region_s2_ss"
-
-ibd_samples_regions$total_samples_pairwise <- ifelse(ibd_samples_regions$region_s1 != ibd_samples_regions$region_s2, rowSums(ibd_samples_regions[c("region_s1_ss", "region_s2_ss")]), ibd_samples_regions$region_s1_ss)
-
-ibd_samples_regions$perc_ibd_samples_pairwise <- ibd_samples_regions$ibd_samples / ibd_samples_regions$total_samples_pairwise
-
-ibd_samples_regions$pairwise_comparison <- paste0(ibd_samples_regions$region_s1, "_", ibd_samples_regions$region_s2)
-
-# Assuming ibd_samples_regions is your data frame
-ibd_samples_regions <- ibd_samples_regions %>%
-  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
-
-# Reorder the levels of the pairwise_comparison factor
-ibd_samples_regions$pairwise_comparison <- factor(ibd_samples_regions$pairwise_comparison, 
-                                                  levels = ibd_samples_regions$pairwise_comparison)
-
-# Create the bar plot
-ggplot(ibd_samples_regions, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = perc_ibd_samples_pairwise)) +
-  geom_bar(stat = "identity") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(x = "Pairwise Comparison", y = "Percentage of IBD Samples") +
-  ggtitle("Percentage of IBD Samples by Pairwise Comparison")+
-  guides(color = FALSE, fill =FALSE) 
-
-
-#pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
-
-#remove "no_genotype" category
-sorted_df_full_geno <- sorted_df[sorted_df$VOC_s1 != "no_genotype",]
-sorted_df_full_geno <- sorted_df_full_geno[sorted_df_full_geno$VOC_s2 != "no_genotype",]
-
-#mean IBD for each pair of genotypes for each pairwise comparison
-sorted_df_full_geno_summary <- sorted_df_full_geno %>% 
-  group_by(conn_provinces, pairwise_geno = paste0(VOC_s1, "_", VOC_s2)) %>% 
-  summarize(IBD = estimate) %>%
-  mutate(geno = ifelse(grepl("WT", pairwise_geno), "WT_vs_res", "res_vs_res")) ## THERE'S ONLY 1 WT SAMPLE, FROM SOFALA
-
-ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) + # fill = pairwise_geno if i want ALL genotypes 1 by 1
-  geom_boxplot() +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(x = "", y = "IBD") +
-  ggtitle("IBD by Connection Provinces and Pairwise Genotype")
-
-
-sorted_df_full_geno_summary_WT_only<- sorted_df_full_geno_summary %>%
-  filter(grepl("Sofala", conn_provinces))
-
-ggplot(sorted_df_full_geno_summary_WT_only, aes(x = pairwise_geno, y = IBD, fill = pairwise_geno)) +
-  geom_boxplot() +
-  facet_wrap(~ conn_provinces, scales = "free", nrow = 3) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(x = "", y = "IBD") +
-  ggtitle("IBD by Connection Provinces and Pairwise Genotype")+
-  guides(color = FALSE, fill =FALSE) 
-
-
-
-##############################
-# ALLELE FREQ TSNE
-#############################
-
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-# 1) extract allele freqs
-#import everything into lists
-rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
-
-# Load each RDS file into the list with the file name as the list name
-allele_freqs_list <- list()
-
-for (file in rds_files) {
-  print(file)
-  file_name <- tools::file_path_sans_ext(basename(file))
-  allele_freqs_list[[file_name]] <- readRDS(file)
-}
-
-# Loop through each element in allele_freqs_list
-processed_allele_freq_results <- data.frame()
-
-for (i in seq_along(allele_freqs_list)) {
-  
-  # Summarize He
-  allele_freq_results <- moire::summarize_allele_freqs(allele_freqs_list[[i]])
-  allele_freq_results$population <- names(allele_freqs_list[i])
-  
-  # Add the processed He results to the list
-  processed_allele_freq_results <- rbind(processed_allele_freq_results, allele_freq_results)
-}
-
-#formatting categories
-processed_allele_freq_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_allele_freq_results$population)
-
-library(stringr)
-processed_allele_freq_results <- processed_allele_freq_results %>%
-  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
-
-
-# Melt the data frame to convert it from wide to long format
-melted <- melt(processed_allele_freq_results, id.vars = c("population", "post_allele_freqs_mean"), measure.vars = "allele")
-melted<-melted[,-3]
-
-library(tidyr)
-
-rearranged_processed_allele_freq_results <- melted %>%
-  pivot_wider(
-    names_from = value,
-    values_from = post_allele_freqs_mean
-  )
-
-# format
-rearranged_processed_allele_freq_results <- as.data.frame(rearranged_processed_allele_freq_results)
-rownames(rearranged_processed_allele_freq_results) <- rearranged_processed_allele_freq_results$population
-rearranged_processed_allele_freq_results <- rearranged_processed_allele_freq_results[, -1]
-rearranged_processed_allele_freq_results <- replace(rearranged_processed_allele_freq_results, is.na(rearranged_processed_allele_freq_results), 0)
-
-
-# Find rows with "Centre", "North", or "South" in their names
-region_columns <- grepl("Centre|North|South", rownames(rearranged_processed_allele_freq_results))
-rearranged_processed_allele_freq_results_region <- rearranged_processed_allele_freq_results[region_columns, ]
-rearranged_processed_allele_freq_results_province <- rearranged_processed_allele_freq_results[!region_columns, ]
-
-library(stringr)
-# Split row names by the last "_"
-metadata_province <- rownames(rearranged_processed_allele_freq_results_province)
-
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-
-metadata_province <- factor(metadata_province, levels = provinces)
-metadata_region <- c("North", "South", "Centre", "Centre", "South", "South", "North", "North", "Centre", "Centre", "Centre")
-
-# tsne of provinces
-perplexity <- floor((length(metadata_province) - 1) / 3) #highest possible
-set.seed(69)
-tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_province), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = perplexity)
-
-# Convert t-SNE results to data frame
-tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
-
-tsne_data_freqs<- cbind(tsne_data_freqs, metadata_region)
-
-# Plot t-SNE of freqs
-ggplot(tsne_data_freqs, aes(V1, V2, color = metadata_province, shape = metadata_region)) + # shape = factor(metadata_province$site)
-  geom_point(size = 10, alpha = 0.7) +
-  labs(title = "t-SNE of Allele Frequencies",
-       x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
-
-
-
-## TO DO
-#1) STATISTICS, check nanna's paper (ongoing)
-#2) what to do when pop He is super low and Hw is 0.5 or above... 1-fws ends up HUGE
-#3) Fst
-#4) subsampling
+ggsave("region_He.png", combined_plot_region, width = 16, height = 8, bg = "white")
 
 
 #######################################3
-# 11.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
+# 10.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
 
 combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
@@ -2054,16 +1370,18 @@ mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwis
 mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
 
 # Plot with significance indication
-ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
+fst_regions <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
   geom_boxplot() +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
   scale_color_manual(values = c("red")) +  # Set colors for significance levels
-  labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
+  labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   theme_minimal() +
   coord_flip()
 
-#ggsave("fst_CI_provinces.png", fstci, width = 12, height = 10, bg = "white")
+fst_regions
+
+ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
@@ -2092,7 +1410,10 @@ mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = regions)
 mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = regions)
 
 heatmap_2022_regions <- create_heatmap(mean_FST_df)
-print(heatmap_2022_regions)
+
+heatmap_2022_regions
+
+ggsave("fst_heatmap_regions.png", heatmap_2022_regions, width = 8, height = 6, bg = "white")
 
 
 #2) FOR PROVINCES
@@ -2244,15 +1565,18 @@ mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwis
 mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
 
 # Plot with significance indication
-ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
+fst_provinces <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
   geom_boxplot() +
   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
   scale_color_manual(values = c("black", "red")) +  # Set colors for significance levels
-  labs(x = "Pairwise Comparisons", y = "Average genome-wide Fst") +
+  labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   theme_minimal() +
   coord_flip()
 
+fst_provinces
+
+ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 10, bg = "white")
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
@@ -2281,63 +1605,709 @@ mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = provinces)
 mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = provinces)
 
 heatmap_2022_provinces <- create_heatmap(mean_FST_df)
-print(heatmap_2022_provinces)
+heatmap_2022_provinces
 
-#ggsave("heatmap_fst_provinces.png", heatmap_2022_regions, width = 12, height = 10, bg = "white")
-
-
+ggsave("heatmap_fst_provinces.png", heatmap_2022_provinces, width = 12, height = 10, bg = "white")
 
 
+########################
+# 11. Ordination, population structure
+########################
+
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
+#add VOC
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
+  
+combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
+                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
+                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
+
+combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
+
+#input for multivariate analyses
+raref_input <- as.data.frame(cbind(NIDA2 = combined_df_merged$NIDA2, 
+                                   year = combined_df_merged$year, 
+                                   province = combined_df_merged$province,
+                                   region = combined_df_merged$region,
+                                   locus = combined_df_merged$locus,
+                                   n.alleles = combined_df_merged$n.alleles,
+                                   norm.reads.locus = combined_df_merged$norm.reads.locus,
+                                   allele = paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar),
+                                   run_id = combined_df_merged$run_id,
+                                   VOC = combined_df_merged$VOC))
 
 
-#SLIGHTLY DIFFERENT CALCULATION, NO CONFIDENCE INTERVALS. KEEPING IT JUST IN CASE...
-
-# #genome-wide average for Hs1 and Hs2 for each pop
-# genome_wide_fst_results <- fst_results_df %>%
-#   group_by(pop1, pop2) %>%
-#   summarize(genome_wide_avg_Hs1 = mean(Hs1),
-#             genome_wide_avg_Hs2 = mean(Hs2),
-#             n1 = unique(n1),
-#             n2 = unique(n2))
-# 
-# #calculate Hs for populations PER LOCUS
-# genome_wide_fst_results$Hs <- (genome_wide_fst_results$genome_wide_avg_Hs1 + genome_wide_fst_results$genome_wide_avg_Hs2) / 2
-# genome_wide_fst_results$Hs <- round(as.numeric(genome_wide_fst_results$Hs),3)
-# 
-# #Calculate Ht (uses sample sizes for each pop)
-# genome_wide_fst_results$Ht <- ((genome_wide_fst_results$n1 * genome_wide_fst_results$genome_wide_avg_Hs1)+ (genome_wide_fst_results$n2 * genome_wide_fst_results$genome_wide_avg_Hs2))/(genome_wide_fst_results$n1 + genome_wide_fst_results$n2)
-# genome_wide_fst_results$Ht <- round(as.numeric(genome_wide_fst_results$Ht),3)
-# 
-# #calcualte Fst
-# genome_wide_fst_results$Fst <- (genome_wide_fst_results$Ht -genome_wide_fst_results$Hs)/genome_wide_fst_results$Ht #the same as 1- (genome_wide_fst_results$Hs/genome_wide_fst_results$Ht)
-# genome_wide_fst_results<- genome_wide_fst_results[!is.na(genome_wide_fst_results$Fst),] ## IDK WHY NAs ARE INTRODUCED DURING COMPARISONS....
-# 
-# # Function to create heatmap
-# create_heatmap <- function(data, title) {
-#   ggplot(data, aes(x = pop2, y = pop1, fill = Fst, label = round(Fst, 4))) +
-#     geom_tile() +
-#     geom_text(color = "black") +
-#     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$Fst), max(data$Fst))) +  # Adjust scale limits
-#     theme_minimal()
-# }
-# 
-# # Create heatmap for provinces comparisons
-# 
-# provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-# provinces <- rev(provinces)
-# 
-# # Remove "_2022" from population names and reorder according to the specified order
-# genome_wide_fst_results$pop1 <- gsub("_2022", "", genome_wide_fst_results$pop1)
-# genome_wide_fst_results$pop2 <- gsub("_2022", "", genome_wide_fst_results$pop2)
-# 
-# # Reorder pop1 and pop2 columns based on provinces order
-# genome_wide_fst_results$pop1 <- factor(genome_wide_fst_results$pop1, levels = provinces)
-# genome_wide_fst_results$pop2 <- factor(genome_wide_fst_results$pop2, levels = provinces)
-# 
-# heatmap_2022_provinces <- create_heatmap(genome_wide_fst_results)
-# print(heatmap_2022_provinces)
+#remove Dry
+raref_input <- raref_input %>%
+  filter(!grepl("Dry", province))
 
 
+# Melt the data frame to convert it from wide to long format
+melted <- melt(raref_input, id.vars = c("NIDA2", "norm.reads.locus"), measure.vars = "allele")
+melted<-melted[,-3]
+
+library(tidyr)
+
+rearranged <- melted %>%
+  pivot_wider(
+    names_from = value,
+    values_from = norm.reads.locus
+  )
+
+# format
+rearranged <- as.data.frame(rearranged)
+rownames(rearranged) <- rearranged$NIDA2
+rearranged <- rearranged[, -1]
+rearranged <- replace(rearranged, is.na(rearranged), 0)
+
+#pca labels:
+NIDA2 <-data.frame(NIDA2 = rownames(rearranged))
+pca_labels<- combined_df_merged %>% distinct(NIDA2, year, province, region, VOC)
+
+pca_labels <- pca_labels %>%
+  filter(!grepl("Dry", province))
+
+if (all(NIDA2$NIDA2 == pca_labels$NIDA2)){
+  print("Order of categorical variables is ok.")
+}else{
+  "grab a coffee."
+}
+
+# format freq df
+rearranged <- rearranged %>%
+  mutate_all(as.numeric)
+
+zero_cols <- sapply(rearranged, function(x) all(x == 0))
+rearranged_filtered <- rearranged[, !zero_cols]
+
+# Replace values greater than 0 with 1: MAKE IT PRESENCE/ABSENCE
+rearranged_pres_abs <- rearranged %>%
+    mutate_all(~ ifelse(. > 0, 1, .))
+
+rearranged_pres_abs <- rearranged_pres_abs %>%
+  mutate_all(as.numeric)
+ 
+
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
+
+#PCA
+pca_result <- prcomp(rearranged, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+af_pca<- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$VOC))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-sample Allele Frequencies",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()+
+  guides(fill = FALSE, color = FALSE, shape = FALSE)
+
+af_pca
+
+# Perform PCA prsence/absence
+pca_result <- prcomp(rearranged_pres_abs, scale. = F)
+
+# Extract the principal component scores
+pcs <- as.data.frame(pca_result$x)
+
+# Combine principal component scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC =pca_labels$VOC)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# Calculate percentage variance explained by each principal component
+pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+# Create the plot
+pa_pca<- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pca_labels$VOC))) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-Sample Allele Presence/Absence",
+       x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
+       y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
+  theme_minimal()
+
+pa_pca
+
+library(cowplot)
+combined_plot_pca <- plot_grid(af_pca, pa_pca, ncol = 2)
+
+ggsave("PCA_regions.png", combined_plot_pca, width = 16, height = 10, bg = "white")
+
+#PCoA
+library(vegan)  # For the vegdist() function
+library(ape)    # For the pcoa() function
+library(ggplot2)
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+# Plot PCoA with variance explained in title
+af_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-Sample Allele Frequecnies",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()+
+  guides(fill = FALSE, color = FALSE, shape = FALSE)
+
+af_pcoa
+
+#PCoA presence/absence
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged_pres_abs, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+# Plot PCoA with variance explained in title
+pa_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-Sample Allele Presence/Absence",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()
+
+pa_pcoa
 
 
-# linear regression and correlation coeff of He vs eMOI
+combined_plot_pcoa <- plot_grid(af_pcoa, pa_pcoa, ncol = 2)
+
+ggsave("PCoA_regions.png", combined_plot_pcoa, width = 16, height = 10, bg = "white")
+
+
+#####TSNE
+set.seed(69)
+perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_filtered), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
+set.seed(69)
+tsne_result_pres_abs <- Rtsne(as.matrix(rearranged_pres_abs), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = F, max_iter = 1e4, num_threads = 0, perplexity = 100)
+
+# Convert t-SNE results to data frame
+tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
+tsne_data_freqs <- cbind(tsne_data_freqs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
+tsne_data_pres_abs <- as.data.frame(tsne_result_pres_abs$Y)
+tsne_data_pres_abs <- cbind(tsne_data_pres_abs, province = pca_labels$province, region = pca_labels$region, VOC = pca_labels$VOC)
+
+# Order factors
+tsne_data_freqs$province <- factor(tsne_data_freqs$province, levels = provinces)
+tsne_data_freqs$region <- factor(tsne_data_freqs$region, levels = regions)
+tsne_data_pres_abs$province <- factor(tsne_data_pres_abs$province, levels = provinces)
+tsne_data_pres_abs$region <- factor(tsne_data_pres_abs$region, levels = regions)
+
+# Plot t-SNE of freqs
+af_tsne <- ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = VOC)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-Sample Allele Frequencies",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()+
+  guides(fill = FALSE, color = FALSE, shape = FALSE)
+
+af_tsne
+
+# Plot t-SNE of presence/absence
+pa_tsne<- ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = VOC)) +
+  geom_point(size = 4, alpha = 0.7) +
+  labs(title = "In-Sample Allele Presence/Absence",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
+
+pa_tsne
+
+combined_plot_tsne <- plot_grid(af_tsne, pa_tsne, ncol = 2)
+
+ggsave("tsne_regions.png", combined_plot_tsne, width = 16, height = 10, bg = "white")
+
+
+
+# POPULATION ALLELE FREQ TSNE
+
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
+# 1) extract allele freqs
+#import everything into lists
+rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
+
+# Load each RDS file into the list with the file name as the list name
+allele_freqs_list <- list()
+
+for (file in rds_files) {
+  print(file)
+  file_name <- tools::file_path_sans_ext(basename(file))
+  allele_freqs_list[[file_name]] <- readRDS(file)
+}
+
+# Loop through each element in allele_freqs_list
+processed_allele_freq_results <- data.frame()
+
+for (i in seq_along(allele_freqs_list)) {
+  
+  # Summarize He
+  allele_freq_results <- moire::summarize_allele_freqs(allele_freqs_list[[i]])
+  allele_freq_results$population <- names(allele_freqs_list[i])
+  
+  # Add the processed He results to the list
+  processed_allele_freq_results <- rbind(processed_allele_freq_results, allele_freq_results)
+}
+
+#formatting categories
+processed_allele_freq_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_allele_freq_results$population)
+
+library(stringr)
+processed_allele_freq_results <- processed_allele_freq_results %>%
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
+
+
+# Melt the data frame to convert it from wide to long format
+melted <- melt(processed_allele_freq_results, id.vars = c("population", "post_allele_freqs_mean"), measure.vars = "allele")
+melted<-melted[,-3]
+
+library(tidyr)
+
+rearranged_processed_allele_freq_results <- melted %>%
+  pivot_wider(
+    names_from = value,
+    values_from = post_allele_freqs_mean
+  )
+
+# format
+rearranged_processed_allele_freq_results <- as.data.frame(rearranged_processed_allele_freq_results)
+rownames(rearranged_processed_allele_freq_results) <- rearranged_processed_allele_freq_results$population
+rearranged_processed_allele_freq_results <- rearranged_processed_allele_freq_results[, -1]
+rearranged_processed_allele_freq_results <- replace(rearranged_processed_allele_freq_results, is.na(rearranged_processed_allele_freq_results), 0)
+
+
+# Find rows with "Centre", "North", or "South" in their names
+region_columns <- grepl("Centre|North|South", rownames(rearranged_processed_allele_freq_results))
+rearranged_processed_allele_freq_results_region <- rearranged_processed_allele_freq_results[region_columns, ]
+rearranged_processed_allele_freq_results_province <- rearranged_processed_allele_freq_results[!region_columns, ]
+
+library(stringr)
+# Split row names by the last "_"
+metadata_province <- rownames(rearranged_processed_allele_freq_results_province)
+
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+
+metadata_province <- factor(metadata_province, levels = provinces)
+metadata_region <- c("North", "South", "Centre", "Centre", "South", "South", "North", "North", "Centre", "Centre", "Centre")
+
+# tsne of provinces
+perplexity <- floor((length(metadata_province) - 1) / 3) #highest possible
+set.seed(69)
+tsne_result_freqs <- Rtsne(as.matrix(rearranged_processed_allele_freq_results_province), dims = 2, verbose = TRUE, check_duplicates = FALSE, pca_center = T, max_iter = 2e4, num_threads = 0, perplexity = perplexity)
+
+# Convert t-SNE results to data frame
+tsne_data_freqs <- as.data.frame(tsne_result_freqs$Y)
+
+tsne_data_freqs<- cbind(tsne_data_freqs, metadata_region)
+
+# Plot t-SNE of freqs
+pop_allele_freq_tsne <- ggplot(tsne_data_freqs, aes(V1, V2, color = metadata_province, shape = metadata_region)) + # shape = factor(metadata_province$site)
+  geom_point(size = 8, alpha = 0.7) +
+  labs(title = "",
+       x = "t-SNE 1", y = "t-SNE 2") +
+  theme_minimal()
+
+pop_allele_freq_tsne
+
+ggsave("pop_allele_freqs_tsne.png", pop_allele_freq_tsne, width = 10, height = 8, bg = "white")
+
+
+#######################################################
+# 12.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
+#######################################################
+
+combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+#rename alleles
+combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
+
+#add VOC
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
+
+combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
+                                 ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
+                                        ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
+
+combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
+
+library(dcifer)
+pardef <- par(no.readonly = TRUE)
+
+## 2022 samples ##
+#format data
+dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+str(dsmp, list.len = 2)
+
+# format metadata
+meta <- unique(combined_df_merged[c("NIDA2", "region", "province")])
+meta <- meta[match(names(dsmp), meta$NIDA2), ]  # order samples as in dsmp
+
+#estimate naive coi
+lrank <- 2
+coi   <- getCOI(dsmp, lrank = lrank)
+min(coi)
+
+#estimate allele freqs
+afreq <- calcAfreq(dsmp, coi, tol = 1e-5) 
+str(afreq, list.len = 2)
+
+#order provinces from north to wouth
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+nsite     <- table(meta$province)[provinces]
+ord       <- order(factor(meta$province, levels = provinces))
+dsmp <- dsmp[ord]
+coi  <- coi[ ord]
+
+#calculate ibd
+dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0, 
+                     alpha = 0.05, nr = 1e3)  
+
+# saveRDS(dres0_2022, "dres0_2022.RDS")
+# dres0_2022 <- readRDS("dres0_2022.RDS")
+
+pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
+
+layout(matrix(1:2, 1), width = c(15, 1))
+par(mar = c(1, 1, 2, 1))
+alpha <- 0.05         
+nsmp  <- length(dsmp)
+atsep <- cumsum(nsite)[-length(nsite)]
+isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
+dmat  <- dres0_2022[, , "estimate"]
+dmat[upper.tri(dmat)] <- t(dmat)[upper.tri(t(dmat))] 
+
+plotRel(dmat, isig = isig, draw_diag = TRUE, alpha = alpha, idlab = FALSE, side_id = c(2, 3), srt_id = c(25, 65), lwd_diag = 0.5, border_sig = "darkviolet")
+
+abline(v = atsep, h = atsep, col = "gray45", lty = 5)
+atclin <- cumsum(nsite) - nsite/2
+mtext(provinces, side = 3, at = atclin, line = 0.2)
+mtext(provinces, side = 2, at = atclin, line = 0.2)
+
+par(mar = c(1, 0, 2, 3))
+plotColorbar()
+
+dev.off()
+
+
+### EXAMINE PAIRS OF SAMPLES!
+str(dres0_2022)
+
+#extract info
+estimates_df <-as.data.frame(dres0_2022[1:924, 1:924, "estimate"])
+estimates_p <-as.data.frame(dres0_2022[1:924, 1:924, "p_value"])
+estimates_CI_lower <- as.data.frame(dres0_2022[1:924, 1:924, "CI_lower"])
+estimates_CI_upper <- as.data.frame(dres0_2022[1:924, 1:924, "CI_upper"])
+
+library(reshape2)
+#sort info into a single df
+
+estimates_df_long <- reshape2::melt(as.matrix(estimates_df))
+names(estimates_df_long) <- c("sample1", "sample2", "estimate")
+estimates_p_long <- reshape2::melt(as.matrix(estimates_p))
+names(estimates_p_long) <- c("sample1", "sample2", "p_value")
+estimates_CI_lower_long <- reshape2::melt(as.matrix(estimates_CI_lower))
+names(estimates_CI_lower_long) <- c("sample1", "sample2", "CI_lower")
+estimates_CI_upper_long <- reshape2::melt(as.matrix(estimates_CI_upper))
+names(estimates_CI_upper_long) <- c("sample1", "sample2", "CI_upper")
+
+merged_df <- merge(estimates_df_long, estimates_p_long, by = c("sample1", "sample2"))
+merged_df <- merge(merged_df, estimates_CI_lower_long, by = c("sample1", "sample2"))
+merged_df <- merge(merged_df, estimates_CI_upper_long, by = c("sample1", "sample2"))
+
+
+
+#saveRDS(merged_df, "dres0_2022_TABLE.RDS")
+merged_df <- readRDS("dres0_2022_TABLE.RDS")
+
+#remove NA rows
+merged_df <- merged_df[complete.cases(merged_df),]
+
+#keep significant cases
+merged_df_signif <- merged_df[merged_df$p_value < 0.05,]
+
+#merge with geo locations for each pair of samples compared
+merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample1", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[7:9] <- c("province_s1", "region_s1", "VOC_s1")
+merged_df_signif_geo<- distinct(merged_df_signif_geo)
+
+merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample2", by.y = "NIDA2")
+colnames(merged_df_signif_geo)[10:12] <- c("province_s2", "region_s2", "VOC_s2")
+merged_df_signif_geo<- distinct(merged_df_signif_geo)
+
+combos_iniciales<- paste0(merged_df_signif[,1], merged_df_signif[,2])
+combos_finales<- paste0(merged_df_signif_geo[,1], merged_df_signif_geo[,2])
+
+#sanity check
+if (length(combos_finales %in% combos_finales) == dim(merged_df_signif_geo)[1]){
+  print("merge was successful.")
+} else{
+  print("grab a coffee.")
+}
+
+#make connectivity columns
+merged_df_signif_geo$conn_provinces <- paste0(merged_df_signif_geo$province_s1, "_", merged_df_signif_geo$province_s2)
+merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_", merged_df_signif_geo$region_s2)
+
+# Sort the data frame by estimate in descending order
+sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
+
+## PROVINCES CONNECTIVITY
+
+# Calculate the median for each group
+median_data <- aggregate(estimate ~ conn_provinces, sorted_df, median)
+
+# Reorder conn_regions based on the median values in descending order
+sorted_df$conn_provinces <- factor(sorted_df$conn_provinces, levels = median_data[order(-median_data$estimate), "conn_provinces"])
+
+# Plot with legend and sorted x-axis
+prov_conn<- ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_regions)) +
+  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Province") +  # Customize legend title
+  ggtitle("Province Connectivity") +
+  xlab("")+
+  ylab("IBD")+
+  guides(color =FALSE)
+
+prov_conn
+
+ggsave("province_connectivity.png", prov_conn, width = 24, height = 12, bg = "white")
+
+## REGIONS CONNECTIVITY
+
+#remove Dry because it should not be incldued in Regions comparison
+sorted_df_nodry<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
+
+# Calculate the median for each group
+median_data <- aggregate(estimate ~ conn_regions, sorted_df_nodry, median)
+
+# Reorder conn_regions based on the median values in descending order
+sorted_df_nodry$conn_regions <- factor(sorted_df_nodry$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
+
+# Plot with legend and sorted x-axis
+reg_conn <- ggplot(sorted_df_nodry, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
+  geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  ggtitle("Region Connectivity") +
+  xlab("")+
+  ylab("IBD")+
+  guides(color = FALSE, fill =FALSE) 
+
+reg_conn
+
+ggsave("region_connectivity.png", reg_conn, width = 12, height = 8, bg = "white")
+
+# pairwise proportions of related infections #
+
+#number of pairwise significantly related (IBD) infections for provinces and regions
+table(sorted_df$conn_provinces)
+table(sorted_df$conn_regions)
+
+
+#sample sizes
+sample_size_provinces <- combined_df_merged %>%
+  group_by(province) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_provinces
+
+sample_size_regions <- combined_df_merged %>%
+  group_by(year, region) %>%
+  summarise(unique_NIDA2_count = n_distinct(NIDA2))
+
+sample_size_regions
+
+
+#calculate percentages for provinces
+ibd_samples_provinces <- sorted_df %>%
+  group_by(paste0(province_s1, "_", province_s2)) %>%
+  summarize(ibd_samples = length(unique(c(sample1, sample2))),
+            province_s1 = province_s1,
+            province_s2 = province_s2) %>%
+  distinct()
+
+ibd_samples_provinces <- ibd_samples_provinces[,-1]
+
+ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s1", by.y = "province")
+colnames(ibd_samples_provinces)[4] <- "province_s1_ss"
+  
+ibd_samples_provinces <- merge(ibd_samples_provinces, sample_size_provinces, by.x = "province_s2", by.y = "province")
+colnames(ibd_samples_provinces)[5] <- "province_s2_ss"
+
+ibd_samples_provinces$total_samples_pairwise <- ifelse(ibd_samples_provinces$province_s1 != ibd_samples_provinces$province_s2, rowSums(ibd_samples_provinces[c("province_s1_ss", "province_s2_ss")]), ibd_samples_provinces$province_s1_ss)
+
+ibd_samples_provinces$perc_ibd_samples_pairwise <- ibd_samples_provinces$ibd_samples / ibd_samples_provinces$total_samples_pairwise
+
+ibd_samples_provinces$pairwise_comparison <- paste0(ibd_samples_provinces$province_s1, "_", ibd_samples_provinces$province_s2)
+
+# Assuming ibd_samples_regions is your data frame
+ibd_samples_provinces <- ibd_samples_provinces %>%
+  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
+
+# Reorder the levels of the pairwise_comparison factor
+ibd_samples_provinces$pairwise_comparison <- factor(ibd_samples_provinces$pairwise_comparison, 
+                                                  levels = ibd_samples_provinces$pairwise_comparison)
+
+ibd_samples_provinces <- merge(ibd_samples_provinces, sorted_df[c("conn_provinces", "conn_regions")], by.x = "pairwise_comparison", by.y = "conn_provinces")
+
+ibd_samples_provinces <- distinct(ibd_samples_provinces)
+
+# Create the bar plot
+prop_ibd_prov <- ggplot(ibd_samples_provinces, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = conn_regions)) +
+  geom_bar(stat = "identity", alpha =0.7) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "", y = "proportion of samples") +
+  #ggtitle("proportion of significantly related IBD samples")+
+  guides(color = FALSE) 
+
+prop_ibd_prov
+
+ggsave("prov_prop_IBD_samples.png", prop_ibd_prov, width = 16, height = 10, bg = "white")
+
+#calculate percentages for regions
+ibd_samples_regions <- sorted_df %>%
+  group_by(paste0(region_s1, "_", region_s2)) %>%
+  summarize(ibd_samples = length(unique(c(sample1, sample2))),
+            region_s1 = region_s1,
+            region_s2 = region_s2) %>%
+  distinct()
+
+ibd_samples_regions <- ibd_samples_regions[,-1]
+
+ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s1", by.y = "region")
+ibd_samples_regions <- ibd_samples_regions[,-4]
+colnames(ibd_samples_regions)[4] <- "region_s1_ss"
+
+ibd_samples_regions <- merge(ibd_samples_regions, sample_size_regions, by.x = "region_s2", by.y = "region")
+ibd_samples_regions <- ibd_samples_regions[,-5]
+colnames(ibd_samples_regions)[5] <- "region_s2_ss"
+
+ibd_samples_regions$total_samples_pairwise <- ifelse(ibd_samples_regions$region_s1 != ibd_samples_regions$region_s2, rowSums(ibd_samples_regions[c("region_s1_ss", "region_s2_ss")]), ibd_samples_regions$region_s1_ss)
+
+ibd_samples_regions$perc_ibd_samples_pairwise <- ibd_samples_regions$ibd_samples / ibd_samples_regions$total_samples_pairwise
+
+ibd_samples_regions$pairwise_comparison <- paste0(ibd_samples_regions$region_s1, "_", ibd_samples_regions$region_s2)
+
+# Assuming ibd_samples_regions is your data frame
+ibd_samples_regions <- ibd_samples_regions %>%
+  arrange(desc(perc_ibd_samples_pairwise))  # Sort the data frame by perc_ibd_samples_pairwise in descending order
+
+# Reorder the levels of the pairwise_comparison factor
+ibd_samples_regions$pairwise_comparison <- factor(ibd_samples_regions$pairwise_comparison, 
+                                                  levels = ibd_samples_regions$pairwise_comparison)
+
+# Create the bar plot
+prop_ibd_reg <- ggplot(ibd_samples_regions, aes(x = pairwise_comparison, y = perc_ibd_samples_pairwise, fill = pairwise_comparison)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Pairwise Comparison", y = "Percentage of IBD Samples") +
+  ggtitle("Percentage of IBD Samples by Pairwise Comparison")+
+  guides(color = FALSE, fill =FALSE) 
+
+prop_ibd_reg
+
+ggsave("region_prop_IBD_samples.png", prop_ibd_reg, width = 16, height = 10, bg = "white")
+
+#pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
+
+#remove "no_genotype" category
+sorted_df_full_geno <- sorted_df[sorted_df$VOC_s1 != "no_genotype",]
+sorted_df_full_geno <- sorted_df_full_geno[sorted_df_full_geno$VOC_s2 != "no_genotype",]
+
+#mean IBD for each pair of genotypes for each pairwise comparison
+sorted_df_full_geno_summary <- sorted_df_full_geno %>% 
+  group_by(conn_provinces, pairwise_geno = paste0(VOC_s1, "_", VOC_s2)) %>% 
+  summarize(IBD = estimate) %>%
+  mutate(geno = ifelse(grepl("WT", pairwise_geno), "WT_vs_res", "res_vs_res")) ## THERE'S ONLY 1 WT SAMPLE, FROM SOFALA
+
+res_wt<- ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) + # fill = pairwise_geno if i want ALL genotypes 1 by 1
+  geom_boxplot() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "IBD") +
+  ggtitle("")
+
+res_wt
+
+ggsave("province_IBD_res_vs_WT.png", res_wt, width = 24, height = 12, bg = "white")
+
+
+sorted_df_full_geno_summary_WT_only<- sorted_df_full_geno_summary %>%
+  filter(grepl("Sofala", conn_provinces))
+
+ggplot(sorted_df_full_geno_summary_WT_only, aes(x = geno, y = IBD, fill = pairwise_geno)) +
+  geom_boxplot() +
+  facet_wrap(~ conn_provinces, scales = "free", nrow = 3) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "", y = "IBD") +
+  ggtitle("IBD by Connection Provinces and Pairwise Genotype")+
+  guides(color = FALSE) 
