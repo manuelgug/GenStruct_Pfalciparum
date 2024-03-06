@@ -411,7 +411,10 @@ sample_size_provinces <- combined_df_merged %>%
 
 sample_size_provinces
 
-sample_size_regions <- combined_df_merged %>%
+combined_df_merged_nodry <- combined_df_merged %>%
+  filter(!grepl("Dry", province))
+
+sample_size_regions <- combined_df_merged_nodry %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
@@ -1199,13 +1202,23 @@ sample_size_provinces <- combined_df_merged %>%
 sample_size_provinces$pop <- sample_size_provinces$province
 sample_size_provinces
 
-sample_size_regions <- combined_df_merged %>%
+# sample_size_regions <- combined_df_merged %>%
+#   group_by(year, region) %>%
+#   summarise(unique_NIDA2_count = n_distinct(NIDA2))
+# 
+# sample_size_regions$pop <- sample_size_regions$region
+# sample_size_regions
+
+
+combined_df_merged_nodry <- combined_df_merged %>%
+  filter(!grepl("Dry", province))
+
+sample_size_regions <- combined_df_merged_nodry %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
 sample_size_regions$pop <- sample_size_regions$region
 sample_size_regions
-
 
 # CALCULATE pairwise Fst ## STILL NOT COMPLETELY SURE ABOUT THIS, BUT HEY...
 # Fst = (Ht - Hs) / Ht [same as 1 - Hs / Ht]*;
