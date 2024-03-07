@@ -662,7 +662,7 @@ coi_results_region$region <- factor(coi_results_region$region, levels = regions)
 polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
 polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
 
-a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
+a <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_wrap(~ province , scales = "fixed", nrow = 1) + 
   labs(title = "",
@@ -673,8 +673,25 @@ a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   guides(fill = FALSE) 
 
 a
+
 ggsave("naive_coi_provinces_ditros.png", a, width = 14, height = 6, bg = "white")
 
+
+a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = region)) +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Region") +
+  labs(x = "", y = "Naive COI") +
+  guides(color = FALSE) 
+
+a1
+
+ggsave("naive_coi_provinces_violin.png", a1, width = 8, height = 6, bg = "white")
 
 b <- ggplot(coi_results_region, aes(x = naive_coi, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
@@ -688,9 +705,26 @@ b <- ggplot(coi_results_region, aes(x = naive_coi, fill = region)) +
 
 b
 
-ggsave("naive_coi_regions_ditros.png", b, width = 10, height = 6, bg = "white")
+ggsave("naive_coi_regions_ditros.png", b, width = 14, height = 6, bg = "white")
 
-c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
+b1 <- ggplot(coi_results_region, aes(x = region, y = naive_coi, fill = region)) +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Region") +
+  labs(x = "", y = "Naive COI") +
+  guides(color = FALSE) 
+
+b1
+
+ggsave("naive_coi_regions_violin.png", b1, width = 8, height = 6, bg = "white")
+
+
+c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_wrap(~ province , scales = "fixed", nrow = 1) + 
   labs(title = "",
@@ -703,6 +737,23 @@ c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
 c
 
 ggsave("ecoi_provinces_ditros.png", c, width = 14, height = 6, bg = "white")
+
+c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = region)) +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Region") +
+  labs(x = "", y = "eCOI") +
+  guides(color = FALSE) 
+
+c1
+
+ggsave("ecoi_provinces_violin.png", c1, width = 8, height = 6, bg = "white")
+
 
 d <- ggplot(coi_results_region, aes(x = post_effective_coi_med, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
@@ -718,6 +769,57 @@ d
 
 ggsave("ecoi_regions_ditros.png", d, width = 10, height = 6, bg = "white")
 
+
+d1 <- ggplot(coi_results_region, aes(x = region, y = post_effective_coi_med, fill = region)) +
+  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_fill_discrete(name = "Region") +
+  labs(x = "", y = "eCOI") +
+  guides(color = FALSE) 
+
+d1
+
+ggsave("ecoi_region_violin.png", d1, width = 8, height = 6, bg = "white")
+
+
+## STATS KRUSKALL WALLIS PROVINCES
+#ecoi
+pairwise_province_ecoi <- pairwise.wilcox.test(coi_results$post_effective_coi_med, 
+                                                  coi_results$province, p.adjust.method = "bonferroni")
+
+pairwise_province_ecoi <- melt(pairwise_province_ecoi[[3]])
+signif_p.pairwise_province_ecoi<- pairwise_province_ecoi[pairwise_province_ecoi$value <0.05 & !is.na(pairwise_province_ecoi$value),]
+
+#naive coi
+pairwise_province_naive_coi <- pairwise.wilcox.test(coi_results$naive_coi, 
+                                               coi_results$province, p.adjust.method = "bonferroni")
+
+pairwise_province_naive_coi <- melt(pairwise_province_naive_coi[[3]])
+signif_p.pairwise_province_naive_coi<- pairwise_province_naive_coi[pairwise_province_naive_coi$value <0.05 & !is.na(pairwise_province_naive_coi$value),]
+
+
+## STATS KRUSKALL WALLIS REGIONS
+#ecoi
+pairwise_region_ecoi <- pairwise.wilcox.test(coi_results_region$post_effective_coi_med, 
+                                               coi_results_region$region, p.adjust.method = "bonferroni")
+
+pairwise_region_ecoi <- melt(pairwise_region_ecoi[[3]])
+signif_p.pairwise_region_ecoi<- pairwise_region_ecoi[pairwise_region_ecoi$value <0.05 & !is.na(pairwise_region_ecoi$value),]
+
+#naive coi
+pairwise_region_naive_coi <- pairwise.wilcox.test(coi_results_region$naive_coi, 
+                                                    coi_results_region$region, p.adjust.method = "bonferroni")
+
+pairwise_region_naive_coi <- melt(pairwise_region_naive_coi[[3]])
+signif_p.pairwise_region_naive_coi<- pairwise_region_naive_coi[pairwise_region_naive_coi$value <0.05 & !is.na(pairwise_region_naive_coi$value),]
+
+
+##polyclonal percentage
 e <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percentage_region, fill = region)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "", y = "% Polyclonal Infections") +
