@@ -658,6 +658,7 @@ provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_
 regions <- c("North", "Centre", "South")
 
 coi_results$province <- factor(coi_results$province, levels = provinces)
+coi_results$region <- factor(coi_results$region, levels = regions)
 coi_results_region$region <- factor(coi_results_region$region, levels = regions)
 polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
 polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
@@ -669,8 +670,7 @@ a <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
        x = "Naive COI",
        y = "Frequency",
        fill = "Province") +
-  theme_minimal() +
-  guides(fill = FALSE) 
+  theme_minimal()
 
 a
 
