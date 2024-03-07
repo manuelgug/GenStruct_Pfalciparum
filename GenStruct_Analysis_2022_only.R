@@ -831,14 +831,18 @@ e
 
 ggsave("perc_polyclonal_regions.png", e, width = 8, height = 6, bg = "white")
 
-f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = province))+
+
+polyclonal_percentage_province <- merge(polyclonal_percentage_province, unique(coi_results[c("province", "region")]), by="province")
+
+f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = region))+
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "", y = "%Polyclonal Infections") +
   #facet_wrap(~province, scales = "fixed", nrow = 1) +
   #scale_fill_manual(values = c("2022" = "orange")) + 
   theme_minimal()+
-  guides(fill = FALSE) 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 f
+
 ggsave("perc_polyclonal_provinces.png", f, width = 10, height = 8, bg = "white")
 
 
@@ -1087,6 +1091,25 @@ reg_fws <- ggplot(mean_Fws_per_individual_nodry, aes(x = region, y = mean_indiv_
 reg_fws
 
 ggsave("region_fws.png", reg_fws, width = 8, height = 6, bg = "white")
+
+
+
+#STAT ANAL 1-FWS PROVINCES
+pairwise_province_fws <- pairwise.wilcox.test(mean_Fws_per_individual$mean_indiv_fws_province, 
+                                                    mean_Fws_per_individual$province, p.adjust.method = "bonferroni")
+
+pairwise_province_fws <- melt(pairwise_province_fws[[3]])
+signif_p.pairwise_province_fws<- pairwise_province_fws[pairwise_province_fws$value <0.05 & !is.na(pairwise_province_fws$value),]
+
+#STAT ANAL 1-FWS REGIONS
+pairwise_region_fws <- pairwise.wilcox.test(mean_Fws_per_individual_nodry$mean_indiv_fws_region, 
+                                              mean_Fws_per_individual_nodry$region, p.adjust.method = "bonferroni")
+
+pairwise_region_fws <- melt(pairwise_region_fws[[3]])
+signif_p.pairwise_region_fws<- pairwise_region_fws[pairwise_region_fws$value <0.05 & !is.na(pairwise_region_fws$value),]
+
+
+
 
 # STATISTICAL ANALYSES
 # Filter data by province and region
