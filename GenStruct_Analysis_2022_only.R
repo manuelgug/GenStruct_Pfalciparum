@@ -829,7 +829,7 @@ e <- ggplot(polyclonal_percentage_region, aes(x = region, y = polyclonal_percent
   guides(fill = FALSE) 
 e
 
-ggsave("perc_polyclonal_regions.png", e, width = 8, height = 6, bg = "white")
+ggsave("perc_polyclonal_regions.png", e, width = 6, height = 4, bg = "white")
 
 
 polyclonal_percentage_province <- merge(polyclonal_percentage_province, unique(coi_results[c("province", "region")]), by="province")
@@ -843,7 +843,7 @@ f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_per
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 f
 
-ggsave("perc_polyclonal_provinces.png", f, width = 10, height = 8, bg = "white")
+ggsave("perc_polyclonal_provinces.png", f, width = 8, height = 6, bg = "white")
 
 
 #######################################################
@@ -2107,6 +2107,78 @@ pop_allele_freq_tsne
 
 ggsave("pop_allele_freqs_tsne.png", pop_allele_freq_tsne, width = 10, height = 8, bg = "white")
 
+
+### MANTEL TEST
+library(vegan)
+library(geosphere)
+
+# Remove rows based on the indices and reorder rows
+rows_to_remove <- grepl("Dry", rownames(rearranged_processed_allele_freq_results_province))
+rearranged_processed_allele_freq_results_province_nodry <- rearranged_processed_allele_freq_results_province[!rows_to_remove, ]
+
+#calculate distances
+bray_curtis_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "bray", diag = T, upper = T)
+manhattan_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "manhattan", diag = T, upper = T)
+euclidean_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "euclidean", diag = T, upper = T)
+gower_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "gower", diag = T, upper = T)
+
+# not actual coordinates??
+coordinates <- data.frame(
+  longitude = c(36.4931, 39.6123, 38.3473, 36.8663, 33.5867, 33.898, 34.8444, 35.3837, 32.5716),
+  latitude = c(-12.8779, -11.6455, -15.1056, -16.2828, -16.1742, -19.0834, -19.1548, -23.865, -25.9692)
+)
+
+rownames(coordinates) <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy")
+
+#calculate harvesine distance
+geo_dist <- distm(coordinates, fun = distHaversine)
+rownames(geo_dist) <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy")
+colnames(geo_dist) <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy")
+
+
+#mantel test fucntion to test multiple distance metrics
+perform_mantel_test <- function(distance, geo_dist) {
+  # Perform Mantel test
+  mantel_result <- mantel(distance, geo_dist, method = "spearman", permutations = 10000)
+  
+  # Extract distance vectors
+  distance_vec <- as.vector(as.matrix(distance))
+  geo_vec <- as.vector(geo_dist)
+  
+  # Create data frame for plotting
+  mat <- data.frame(deest = distance_vec, geo = geo_vec)
+  
+  # Filter out zero values for Bray-Curtis distance
+  mat <- mat[mat$deest > 0, ]
+  
+  # Create scatter plot
+  plot <- ggplot(mat, aes(y = deest, x = geo / 1000)) + 
+    geom_point(size = 4, alpha = 0.75, colour = "black", shape = 21, aes(fill = geo / 1000)) + 
+    geom_smooth(method = "lm", colour = "black", alpha = 0.2) + 
+    labs(x = "Harvesine Distance", y = "Bray-Curtis Dissimilarity", fill = "Kilometers") + 
+    theme(axis.text.x = element_text(face = "bold", colour = "black", size = 12), 
+          axis.text.y = element_text(face = "bold", size = 11, colour = "black"), 
+          axis.title = element_text(face = "bold", size = 14, colour = "black"), 
+          panel.background = element_blank(), 
+          panel.border = element_rect(fill = NA, colour = "black"),
+          legend.position = "right",
+          legend.text = element_text(size = 10, face = "bold"),
+          legend.title = element_text(size = 11, face = "bold")) +
+    scale_fill_continuous(high = "navy", low = "skyblue")
+  
+  # Return Mantel test result and the scatter plot
+  return(list(mantel_result = mantel_result, plot = plot))
+}
+
+res <- perform_mantel_test(bray_curtis_dist, geo_dist)
+# perform_mantel_test(manhattan_dist, geo_dist)
+# perform_mantel_test(euclidean_dist, geo_dist)
+# perform_mantel_test(gower_dist, geo_dist)
+
+p <- res$plot
+p
+
+ggsave("mantel_pop_allele_Freqs.png", p, width = 8, height = 6, bg = "white")
 
 #######################################################
 # 12.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
