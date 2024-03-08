@@ -2330,11 +2330,11 @@ merged_df_signif <- merged_df[merged_df$p_value < 0.01,]
 merged_df_signif <- merged_df[merged_df$estimate > 0.25,]
 
 #merge with geo locations for each pair of samples compared
-merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample1", by.y = "NIDA2")
+merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC_436_581")], by.x = "sample1", by.y = "NIDA2")
 colnames(merged_df_signif_geo)[7:9] <- c("province_s1", "region_s1", "VOC_s1")
 merged_df_signif_geo<- distinct(merged_df_signif_geo)
 
-merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample2", by.y = "NIDA2")
+merged_df_signif_geo <- merge(merged_df_signif_geo, combined_df_merged[, c("NIDA2", "province", "region", "VOC_436_581")], by.x = "sample2", by.y = "NIDA2")
 colnames(merged_df_signif_geo)[10:12] <- c("province_s2", "region_s2", "VOC_s2")
 merged_df_signif_geo<- distinct(merged_df_signif_geo)
 
@@ -2537,7 +2537,7 @@ sorted_df_full_geno <- sorted_df_full_geno[sorted_df_full_geno$VOC_s2 != "no_gen
 sorted_df_full_geno_summary <- sorted_df_full_geno %>% 
   group_by(conn_provinces, pairwise_geno = paste0(VOC_s1, "_", VOC_s2)) %>% 
   summarize(IBD = estimate) %>%
-  mutate(geno = ifelse(grepl("WT", pairwise_geno), "WT_vs_res", "res_vs_res")) ## THERE'S ONLY 1 WT SAMPLE, FROM SOFALA
+  mutate(geno = ifelse(grepl("WT_WT", pairwise_geno), "WT_vs_WT", "WT_vs_res"))
 
 res_wt<- ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) + # fill = pairwise_geno if i want ALL genotypes 1 by 1
   geom_boxplot() +
@@ -2551,10 +2551,10 @@ res_wt
 ggsave("province_IBD_res_vs_WT.png", res_wt, width = 24, height = 12, bg = "white")
 
 
-sorted_df_full_geno_summary_WT_only<- sorted_df_full_geno_summary %>%
-  filter(grepl("Sofala", conn_provinces))
+# sorted_df_full_geno_summary_WT_only<- sorted_df_full_geno_summary %>%
+#   filter(grepl("Sofala", conn_provinces))
 
-ggplot(sorted_df_full_geno_summary_WT_only, aes(x = geno, y = IBD, fill = pairwise_geno)) +
+ggplot(sorted_df_full_geno_summary, aes(x = geno, y = IBD, fill = pairwise_geno)) +
   geom_boxplot() +
   facet_wrap(~ conn_provinces, scales = "free", nrow = 3) +
   theme_minimal() +
@@ -2562,3 +2562,4 @@ ggplot(sorted_df_full_geno_summary_WT_only, aes(x = geno, y = IBD, fill = pairwi
   labs(x = "", y = "IBD") +
   ggtitle("IBD by Connection Provinces and Pairwise Genotype")+
   guides(color = FALSE) 
+
