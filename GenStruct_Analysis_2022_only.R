@@ -846,6 +846,15 @@ f
 ggsave("perc_polyclonal_provinces.png", f, width = 8, height = 6, bg = "white")
 
 
+###
+# coi results for Simone
+coi_for_db <- coi_results[c("NIDA2", "naive_coi", "post_effective_coi_med")]
+
+write.csv(coi_for_db, "coi_for_db.csv", row.names = F)
+
+plot(coi_for_db$naive_coi, coi_for_db$post_effective_coi_med)
+###
+
 #######################################################
 # 8.- calculate He for each population (per region/province)
 #######################################################
