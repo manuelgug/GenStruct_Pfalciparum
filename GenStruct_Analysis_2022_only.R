@@ -2266,13 +2266,13 @@ dres0_2022 <- ibdDat(dsmp, coi, afreq,  pval = TRUE, confint = TRUE, rnull = 0,
                      alpha = 0.05, nr = 1e3)  
 
 # saveRDS(dres0_2022, "dres0_2022.RDS")
-# dres0_2022 <- readRDS("dres0_2022.RDS")
+dres0_2022 <- readRDS("dres0_2022.RDS")
 
 pdf("dres0_2022_plot.pdf", width = 15, height = 15) 
 
 layout(matrix(1:2, 1), width = c(15, 1))
 par(mar = c(1, 1, 2, 1))
-alpha <- 0.05         
+alpha <- 0.01         
 nsmp  <- length(dsmp)
 atsep <- cumsum(nsite)[-length(nsite)]
 isig  <- which(dres0_2022[, , "p_value"] <= alpha, arr.ind = TRUE)
@@ -2326,7 +2326,8 @@ merged_df <- readRDS("dres0_2022_TABLE.RDS")
 merged_df <- merged_df[complete.cases(merged_df),]
 
 #keep significant cases
-merged_df_signif <- merged_df[merged_df$p_value < 0.05,]
+merged_df_signif <- merged_df[merged_df$p_value < 0.01,]
+merged_df_signif <- merged_df[merged_df$estimate > 0.25,]
 
 #merge with geo locations for each pair of samples compared
 merged_df_signif_geo <- merge(merged_df_signif, combined_df_merged[, c("NIDA2", "province", "region", "VOC")], by.x = "sample1", by.y = "NIDA2")
@@ -2424,7 +2425,10 @@ sample_size_provinces <- combined_df_merged %>%
 
 sample_size_provinces
 
-sample_size_regions <- combined_df_merged %>%
+combined_df_merged_nodry <- combined_df_merged %>%
+  filter(!grepl("Dry", province))
+
+sample_size_regions <- combined_df_merged_nodry %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
@@ -2523,8 +2527,8 @@ prop_ibd_reg
 
 ggsave("region_prop_IBD_samples.png", prop_ibd_reg, width = 16, height = 10, bg = "white")
 
-#pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
 
+#pairwise IBD between samples with variants of concern and wildtype parasites from the same or different areas.
 #remove "no_genotype" category
 sorted_df_full_geno <- sorted_df[sorted_df$VOC_s1 != "no_genotype",]
 sorted_df_full_geno <- sorted_df_full_geno[sorted_df_full_geno$VOC_s2 != "no_genotype",]
