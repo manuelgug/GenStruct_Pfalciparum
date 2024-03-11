@@ -1170,7 +1170,6 @@ shapiro_test_results_region
 
 
 ## He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox): 
-# 1) SPATIAL COMPARISNS
 pairwise_province_He_2022 <- pairwise.wilcox.test(combined_data_province$He_province, 
                                                   combined_data_province$province, p.adjust.method = "bonferroni")
 
@@ -1255,6 +1254,113 @@ p4
 combined_plot_region <- plot_grid(p3, p4, ncol = 2)
 
 ggsave("region_He.png", combined_plot_region, width = 16, height = 8, bg = "white")
+
+
+## linear mixed models to assess difference in He (from Nanna's scripts)
+library(nlme)
+
+# LLM
+he_province <- processed_He_results[processed_He_results$geo == "province",] %>% 
+  mutate(population = factor(population, levels = c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy")))
+
+he.model.province <- lme(post_stat_med ~ population,
+                   random = ~ 1 | locus,
+                   data = he_province,
+                   na.action = na.omit)
+summary(he.model.province)
+
+# compare log likelihood fonctions btwene bas emodel and the one with random intercept
+AIC(logLik(he.model.province))
+summary(he.model.province)$tTable
+
+#get CIs
+ci.mod <- intervals(he.model.province, which = "fixed")
+
+ci.mod$fixed[1,] # Niassa
+ci.mod$fixed[1,] + ci.mod$fixed[2,] # Cabo_Delgado
+ci.mod$fixed[1,] + ci.mod$fixed[3,] # Nampula
+ci.mod$fixed[1,] + ci.mod$fixed[4,] # Zambezia
+ci.mod$fixed[1,] + ci.mod$fixed[5,] # Tete
+ci.mod$fixed[1,] + ci.mod$fixed[6,] # MAnica_Dry
+ci.mod$fixed[1,] + ci.mod$fixed[7,] # Manica_Rainy
+ci.mod$fixed[1,] + ci.mod$fixed[8,] # Sofala
+ci.mod$fixed[1,] + ci.mod$fixed[9,] # Inhambane
+ci.mod$fixed[1,] + ci.mod$fixed[10,] # Maputo_Dry
+ci.mod$fixed[1,] + ci.mod$fixed[11,] # Maputo_Rainy
+
+
+# get pvalue
+anova(he.model.province, type = "marginal")
+
+
+
+#PAIRWISE COMPARISONS
+
+# Load necessary libraries
+library(nlme)
+
+# Define the vector of provinces
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+
+
+# Initialize an empty list to store the contrast matrices
+contrasts <- list()
+
+# Loop through each pair of provinces
+for (i in 1:(length(provinces) - 1)) {
+  for (j in (i + 1):length(provinces)) {
+    # Initialize a contrast matrix with zeros
+    contrast_matrix <- matrix(0, nrow = 1, ncol = length(provinces))
+    # Set values for the provinces being compared
+    contrast_matrix[1, i] <- 1
+    contrast_matrix[1, j] <- -1
+    # Add the contrast matrix to the list
+    contrasts[[paste0(provinces[i], "_vs_", provinces[j])]] <- contrast_matrix
+  }
+}
+
+
+# Initialize vectors to store results
+contrast_estimates <- numeric(length(contrasts))
+t_values <- numeric(length(contrasts))
+p_values <- numeric(length(contrasts))
+
+# Loop through each pairwise comparison
+for (i in seq_along(contrasts)) {
+  
+  # Fit LMM for the pairwise comparison
+  he.model.pairwise <- lme(post_stat_med ~ population,
+                           random = ~ 1 | locus,
+                           data = he_province,
+                           na.action = na.omit,
+                           subset = as.numeric(contrasts[[i]]) != 0)
+  
+  # Extract fixed effects coefficients
+  coefficients <- fixef(he.model.pairwise)
+  
+  # Calculate contrast estimate
+  contrast_estimate <- sum(contrasts[[i]] * coefficients)
+  
+  # Extract residual standard error
+  residual_se <- summary(he.model.pairwise)$sigma
+  
+  # Calculate t-value
+  t_value <- contrast_estimate / residual_se
+  
+  # Degrees of freedom
+  df <- he.model.pairwise$fixDF$X["(Intercept)"]
+  
+  # Calculate p-value
+  p_value <- 2 * pt(abs(t_value), df = df, lower.tail = FALSE)
+  
+  # Store results
+  contrast_estimates[i] <- contrast_estimate
+  t_values[i] <- t_value
+  p_values[i] <- p_value
+}
+
+# Print or further process the results
+
 
 
 #######################################3
@@ -2355,6 +2461,11 @@ merged_df_signif_geo$conn_regions <- paste0(merged_df_signif_geo$region_s1, "_",
 # Sort the data frame by estimate in descending order
 sorted_df <- merged_df_signif_geo %>% arrange(desc(estimate))
 
+
+#remove Dry for connectivity comparisons
+sorted_df<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
+
+
 ## PROVINCES CONNECTIVITY
 
 # Calculate the median for each group
@@ -2370,7 +2481,7 @@ prov_conn<- ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_
   theme_minimal() +
   theme(
     plot.title = element_text(size = 11), 
-    axis.text.x = element_text(angle = 45, hjust = 1)
+    axis.text.x = element_text(angle = 90, hjust = 1)
   ) +
   scale_fill_discrete(name = "Province") +  # Customize legend title
   ggtitle("Province Connectivity") +
@@ -2380,21 +2491,18 @@ prov_conn<- ggplot(sorted_df, aes(x = conn_provinces, y = estimate, fill = conn_
 
 prov_conn
 
-ggsave("province_connectivity.png", prov_conn, width = 24, height = 12, bg = "white")
+ggsave("province_connectivity.png", prov_conn, width = 14, height = 7, bg = "white")
 
 ## REGIONS CONNECTIVITY
 
-#remove Dry because it should not be incldued in Regions comparison
-sorted_df_nodry<- sorted_df[!grepl("Dry", sorted_df$conn_provinces), ] #REMOVE TO INCLUDE DRY SEASON IN THE CONNECTIVITY COMPARISON
-
 # Calculate the median for each group
-median_data <- aggregate(estimate ~ conn_regions, sorted_df_nodry, median)
+median_data <- aggregate(estimate ~ conn_regions, sorted_df, median)
 
 # Reorder conn_regions based on the median values in descending order
-sorted_df_nodry$conn_regions <- factor(sorted_df_nodry$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
+sorted_df$conn_regions <- factor(sorted_df$conn_regions, levels = median_data[order(-median_data$estimate), "conn_regions"])
 
 # Plot with legend and sorted x-axis
-reg_conn <- ggplot(sorted_df_nodry, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
+reg_conn <- ggplot(sorted_df, aes(x = conn_regions, y = estimate, fill = conn_regions)) +
   geom_violin(width = 1, aes(color = conn_regions), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = conn_regions), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -2539,10 +2647,19 @@ sorted_df_full_geno_summary <- sorted_df_full_geno %>%
   summarize(IBD = estimate) %>%
   mutate(geno = ifelse(grepl("WT_WT", pairwise_geno), "WT_vs_WT", "WT_vs_res"))
 
-res_wt<- ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) + # fill = pairwise_geno if i want ALL genotypes 1 by 1
+# 
+# # Calculate the median IBD for each conn_provinces value
+# median_IBD <- aggregate(IBD ~ conn_provinces, data = sorted_df_full_geno_summary[sorted_df_full_geno_summary$geno == "WT_vs_res",], FUN = median)
+# 
+# # Reorder the levels of conn_provinces based on the median IBD of WT_vs_WT category
+# sorted_df_full_geno_summary$conn_provinces <- factor(sorted_df_full_geno_summary$conn_provinces, 
+#                                                      levels = median_IBD[order(-median_IBD$IBD), "conn_provinces"])
+
+# Plot with conn_provinces sorted by median IBD of WT_vs_WT category
+res_wt <- ggplot(sorted_df_full_geno_summary, aes(x = conn_provinces, y = IBD, fill = geno)) +
   geom_boxplot() +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(x = "", y = "IBD") +
   ggtitle("")
 
