@@ -1276,7 +1276,7 @@ summary(he.model.province)$tTable
 #get CIs
 ci.mod <- intervals(he.model.province, which = "fixed")
 
-ci.mod$fixed[1,] # Niassa
+ci.mod$fixed[1,] # Niassa (first reference)
 ci.mod$fixed[1,] + ci.mod$fixed[2,] # Cabo_Delgado
 ci.mod$fixed[1,] + ci.mod$fixed[3,] # Nampula
 ci.mod$fixed[1,] + ci.mod$fixed[4,] # Zambezia
@@ -1291,6 +1291,78 @@ ci.mod$fixed[1,] + ci.mod$fixed[11,] # Maputo_Rainy
 
 # get pvalue
 anova(he.model.province, type = "marginal")
+
+
+
+
+
+
+### EACH SITE AS REFERENCE!
+library(nlme)
+library(dplyr)
+
+# Define the population levels
+population_levels <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", 
+                       "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", 
+                       "Maputo_Dry", "Maputo_Rainy")
+
+# Function to fit LLM and collect results for each reference level
+fit_and_collect_results <- function(reference_population) {
+  # Subset data and set reference population
+  he_province <- processed_He_results[processed_He_results$geo == "province",] %>%
+    mutate(population = factor(population, levels = population_levels)) %>%
+    mutate(population = relevel(population, reference_population))
+  
+  # Fit LLM
+  he.model.province <- lme(post_stat_med ~ population,
+                           random = ~ 1 | locus,
+                           data = he_province,
+                           na.action = na.omit)
+  
+  # Extract and return summary statistics
+  summary_data <- summary(he.model.province)
+  aic <- AIC(logLik(he.model.province))
+  t_table <- summary_data$tTable
+  ci_mod <- intervals(he.model.province, which = "fixed")
+  p_values <- anova(he.model.province, type = "marginal")$'p-value'
+  
+  # Extract CI for reference population
+  ci_reference <- ci_mod$fixed[1,]
+  
+  # Extract CIs for other populations
+  ci_others <- lapply(2:length(population_levels), function(i) ci_reference + ci_mod$fixed[i,])
+  
+  # Combine results
+  results <- list(summary_data = summary_data, 
+                  aic = aic,
+                  t_table = t_table,
+                  ci_reference = ci_reference,
+                  ci_others = ci_others,
+                  p_values = p_values, 
+                  reference_population = reference_population)
+  
+  return(results)
+}
+
+# Apply the function to each reference population
+results_list <- lapply(population_levels, fit_and_collect_results)
+
+# Name the results list with the reference population names
+names(results_list) <- population_levels
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
