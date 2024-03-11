@@ -1120,67 +1120,67 @@ signif_p.pairwise_region_fws<- pairwise_region_fws[pairwise_region_fws$value <0.
 
 
 
-# STATISTICAL ANALYSES
+# # STATISTICAL ANALYSES
 # Filter data by province and region
-combined_data_province <- rbind(data.frame(He_province = processed_He_results[processed_He_results$geo == "province", ]$post_stat_mean, 
+combined_data_province <- rbind(data.frame(He_province = processed_He_results[processed_He_results$geo == "province", ]$post_stat_mean,
                                            province = processed_He_results[processed_He_results$geo == "province", ]$population))
 
-combined_data_region <- rbind(data.frame(He_region = processed_He_results[processed_He_results$geo == "region", ]$post_stat_mean, 
+combined_data_region <- rbind(data.frame(He_region = processed_He_results[processed_He_results$geo == "region", ]$post_stat_mean,
                                          region = processed_He_results[processed_He_results$geo == "region", ]$population))
 
-
-# CHECK FOR NORMALITY IN THE He DATA
-# PROVINCE
-# Create Q-Q plots
-ggplot(combined_data_province, aes(sample = He_province)) +
-  geom_qq() +
-  geom_qq_line() +
-  labs(title = "Q-Q Plot of He_province by Province",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles") +
-  facet_grid(~ province, scales = "free")
-
-# Perform Shapiro-Wilk
-shapiro_test_results_province <- combined_data_province %>%
-  group_by(province) %>%
-  summarize(
-    p_value = shapiro.test(He_province)$p.value
-  )
-
-shapiro_test_results_province
-
-#REGION
-# Create Q-Q plots
-ggplot(combined_data_region, aes(sample = He_region)) +
-  geom_qq() +
-  geom_qq_line() +
-  labs(title = "Q-Q Plot of He_region by Province and Year",
-       x = "Theoretical Quantiles",
-       y = "Sample Quantiles") +
-  facet_grid(~region , scales = "free")
-
-# Perform Shapiro-Wilk test
-shapiro_test_results_region <- combined_data_region %>%
-  group_by(region) %>%
-  summarize(
-    p_value = shapiro.test(He_region)$p.value
-  )
-
-shapiro_test_results_region
-
-
-## He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox): 
-pairwise_province_He_2022 <- pairwise.wilcox.test(combined_data_province$He_province, 
-                                                  combined_data_province$province, p.adjust.method = "bonferroni")
-
-p.val_province_He_2022 <- melt(pairwise_province_He_2022[[3]])
-signif_p.val_province_He_2022 <- p.val_province_He_2022[p.val_province_He_2022$value <0.05 & !is.na(p.val_province_He_2022$value),]
-
-pairwise_region_He_2022 <- pairwise.wilcox.test(combined_data_region$He_region, 
-                                                combined_data_region$region, p.adjust.method = "bonferroni")
-
-p.val_region_He_2022 <- melt(pairwise_region_He_2022[[3]])
-signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
+# 
+# # CHECK FOR NORMALITY IN THE He DATA
+# # PROVINCE
+# # Create Q-Q plots
+# ggplot(combined_data_province, aes(sample = He_province)) +
+#   geom_qq() +
+#   geom_qq_line() +
+#   labs(title = "Q-Q Plot of He_province by Province",
+#        x = "Theoretical Quantiles",
+#        y = "Sample Quantiles") +
+#   facet_grid(~ province, scales = "free")
+# 
+# # Perform Shapiro-Wilk
+# shapiro_test_results_province <- combined_data_province %>%
+#   group_by(province) %>%
+#   summarize(
+#     p_value = shapiro.test(He_province)$p.value
+#   )
+# 
+# shapiro_test_results_province
+# 
+# #REGION
+# # Create Q-Q plots
+# ggplot(combined_data_region, aes(sample = He_region)) +
+#   geom_qq() +
+#   geom_qq_line() +
+#   labs(title = "Q-Q Plot of He_region by Province and Year",
+#        x = "Theoretical Quantiles",
+#        y = "Sample Quantiles") +
+#   facet_grid(~region , scales = "free")
+# 
+# # Perform Shapiro-Wilk test
+# shapiro_test_results_region <- combined_data_region %>%
+#   group_by(region) %>%
+#   summarize(
+#     p_value = shapiro.test(He_region)$p.value
+#   )
+# 
+# shapiro_test_results_region
+# 
+# 
+# ## He DATA IS NOT NORMAL, SO KRUSKAL-WALLIS (wilcox): 
+# pairwise_province_He_2022 <- pairwise.wilcox.test(combined_data_province$He_province, 
+#                                                   combined_data_province$province, p.adjust.method = "bonferroni")
+# 
+# p.val_province_He_2022 <- melt(pairwise_province_He_2022[[3]])
+# signif_p.val_province_He_2022 <- p.val_province_He_2022[p.val_province_He_2022$value <0.05 & !is.na(p.val_province_He_2022$value),]
+# 
+# pairwise_region_He_2022 <- pairwise.wilcox.test(combined_data_region$He_region, 
+#                                                 combined_data_region$region, p.adjust.method = "bonferroni")
+# 
+# p.val_region_He_2022 <- melt(pairwise_region_He_2022[[3]])
+# signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
 
 
 # Changes in He distributions and means by year
@@ -1222,7 +1222,7 @@ p2
 library(cowplot)
 combined_plot_prov <- plot_grid(p1, p2, ncol = 2)
 
-ggsave("province_He.png", combined_plot, width = 16, height = 8, bg = "white")
+ggsave("province_He.png", combined_plot_prov, width = 16, height = 8, bg = "white")
 
 #regions
 mean_data_region <- combined_data_region %>%
@@ -1256,60 +1256,22 @@ combined_plot_region <- plot_grid(p3, p4, ncol = 2)
 ggsave("region_He.png", combined_plot_region, width = 16, height = 8, bg = "white")
 
 
+
 ## linear mixed models to assess difference in He (from Nanna's scripts)
+# LLM (EACH SITE AS REFERENCE)
 library(nlme)
-
-# LLM
-he_province <- processed_He_results[processed_He_results$geo == "province",] %>% 
-  mutate(population = factor(population, levels = c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy")))
-
-he.model.province <- lme(post_stat_med ~ population,
-                   random = ~ 1 | locus,
-                   data = he_province,
-                   na.action = na.omit)
-summary(he.model.province)
-
-# compare log likelihood fonctions btwene bas emodel and the one with random intercept
-AIC(logLik(he.model.province))
-summary(he.model.province)$tTable
-
-#get CIs
-ci.mod <- intervals(he.model.province, which = "fixed")
-
-ci.mod$fixed[1,] # Niassa (first reference)
-ci.mod$fixed[1,] + ci.mod$fixed[2,] # Cabo_Delgado
-ci.mod$fixed[1,] + ci.mod$fixed[3,] # Nampula
-ci.mod$fixed[1,] + ci.mod$fixed[4,] # Zambezia
-ci.mod$fixed[1,] + ci.mod$fixed[5,] # Tete
-ci.mod$fixed[1,] + ci.mod$fixed[6,] # MAnica_Dry
-ci.mod$fixed[1,] + ci.mod$fixed[7,] # Manica_Rainy
-ci.mod$fixed[1,] + ci.mod$fixed[8,] # Sofala
-ci.mod$fixed[1,] + ci.mod$fixed[9,] # Inhambane
-ci.mod$fixed[1,] + ci.mod$fixed[10,] # Maputo_Dry
-ci.mod$fixed[1,] + ci.mod$fixed[11,] # Maputo_Rainy
-
-
-# get pvalue
-anova(he.model.province, type = "marginal")
-
-
-
-
-
-
-### EACH SITE AS REFERENCE!
-library(nlme)
-library(dplyr)
 
 # Define the population levels
-population_levels <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", 
-                       "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", 
-                       "Maputo_Dry", "Maputo_Rainy")
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+regions <- c("North", "Centre", "South")
 
+
+###
 # Function to fit LLM and collect results for each reference level
-fit_and_collect_results <- function(reference_population) {
+fit_and_collect_results <- function(reference_population, pop = "region") {
+  
   # Subset data and set reference population
-  he_province <- processed_He_results[processed_He_results$geo == "province",] %>%
+  he_province <- processed_He_results[processed_He_results$geo == pop,] %>%
     mutate(population = factor(population, levels = population_levels)) %>%
     mutate(population = relevel(population, reference_population))
   
@@ -1318,121 +1280,142 @@ fit_and_collect_results <- function(reference_population) {
                            random = ~ 1 | locus,
                            data = he_province,
                            na.action = na.omit)
-  
+
   # Extract and return summary statistics
   summary_data <- summary(he.model.province)
   aic <- AIC(logLik(he.model.province))
   t_table <- summary_data$tTable
   ci_mod <- intervals(he.model.province, which = "fixed")
-  p_values <- anova(he.model.province, type = "marginal")$'p-value'
+  p_values <- anova(he.model.province, type = "marginal")$'p-value'[2]
   
   # Extract CI for reference population
   ci_reference <- ci_mod$fixed[1,]
+  ci_reference <- t(as.data.frame(ci_reference))
+  rownames(ci_reference) <- reference_population
   
   # Extract CIs for other populations
-  ci_others <- lapply(2:length(population_levels), function(i) ci_reference + ci_mod$fixed[i,])
+  ci_others <- t(sapply(2:length(population_levels), function(i) ci_reference + ci_mod$fixed[i,]))
+  rownames(ci_others) <- population_levels[!population_levels %in% reference_population]
+  
+  ci_all <- rbind(ci_reference, ci_others)
+  
+  #merge tables
+  t_table <- cbind(t_table, ci_all)
+  rownames(t_table) <- rownames(ci_all)
+  t_table <- as.data.frame(t_table)
+  t_table$reference_pop <- reference_population
+  t_table$compared_pop <- rownames(t_table)
   
   # Combine results
-  results <- list(summary_data = summary_data, 
-                  aic = aic,
-                  t_table = t_table,
-                  ci_reference = ci_reference,
-                  ci_others = ci_others,
-                  p_values = p_values, 
-                  reference_population = reference_population)
+  results <- list(reference_population = reference_population,
+                  t_table = t_table)
   
   return(results)
 }
 
-# Apply the function to each reference population
-results_list <- lapply(population_levels, fit_and_collect_results)
+###
 
-# Name the results list with the reference population names
-names(results_list) <- population_levels
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#PAIRWISE COMPARISONS
-
-# Load necessary libraries
-library(nlme)
-
-# Define the vector of provinces
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-
-
-# Initialize an empty list to store the contrast matrices
-contrasts <- list()
-
-# Loop through each pair of provinces
-for (i in 1:(length(provinces) - 1)) {
-  for (j in (i + 1):length(provinces)) {
-    # Initialize a contrast matrix with zeros
-    contrast_matrix <- matrix(0, nrow = 1, ncol = length(provinces))
-    # Set values for the provinces being compared
-    contrast_matrix[1, i] <- 1
-    contrast_matrix[1, j] <- -1
-    # Add the contrast matrix to the list
-    contrasts[[paste0(provinces[i], "_vs_", provinces[j])]] <- contrast_matrix
-  }
-}
-
-
-# Initialize vectors to store results
-contrast_estimates <- numeric(length(contrasts))
-t_values <- numeric(length(contrasts))
-p_values <- numeric(length(contrasts))
-
-# Loop through each pairwise comparison
-for (i in seq_along(contrasts)) {
+analyze_results <- function(results_list, pop = "region") {
+  # edit list
+  names(results_list) <- population_levels
   
-  # Fit LMM for the pairwise comparison
-  he.model.pairwise <- lme(post_stat_med ~ population,
+  results_list <- lapply(results_list, function(sublist) {
+    # Remove the reference_population element from each sublist
+    sublist$reference_population <- NULL
+    return(sublist)
+  })
+  
+  
+  llm_tables_list <- list()
+  
+  # Extract t_table from each element in results_list
+  for (population_name in names(results_list)) {
+    t_table <- results_list[[population_name]]$t_table
+    llm_tables_list[[population_name]] <- t_table
+  }
+  
+  # Combine all t_tables into a single dataframe
+  llm_tables_all <- do.call(rbind, llm_tables_list)
+  
+  llm_tables_all$lower <- round(llm_tables_all$lower, 3)
+  llm_tables_all$est. <- round(llm_tables_all$est., 3)
+  llm_tables_all$upper <- round(llm_tables_all$upper, 3)
+  
+  llm_tables_all <- llm_tables_all[llm_tables_all$reference_pop != llm_tables_all$compared_pop,]
+  
+  #plot He and 95% CI for each pop
+  CIs <- llm_tables_all[c("compared_pop", "lower", "est.", "upper")]
+  rownames(CIs) <- NULL
+  
+  CIs <- unique(CIs)
+  
+  CIs$compared_pop <- factor(CIs$compared_pop, levels = rev(population_levels))
+  
+  # Create a ggplot object
+  plotci <- ggplot(CIs, aes(x = compared_pop, y = est.)) +
+    # Add the center point
+    geom_point(color = "black") +
+    # Add the error bars for confidence intervals
+    geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "black") +
+    # Adjust the appearance
+    labs(title = "Center and Confidence Intervals for Compared Populations",
+         x = "Compared Population",
+         y = "Estimate") +
+    theme_minimal()+
+    coord_flip()
+  
+  plotci
+  
+  #put zero to self comparisons
+  #llm_tables_all[llm_tables_all$`p-value` < 0.0000001, ]$`p-value` <- 0
+  
+  #significant pairwise comparions
+  llm_tables_significant_pariwise<- llm_tables_all[llm_tables_all$reference_pop != llm_tables_all$compared_pop &  llm_tables_all$`p-value`< 0.05,]
+  llm_tables_significant_pariwise <- subset(llm_tables_significant_pariwise, !duplicated(t(apply(llm_tables_significant_pariwise[c("compared_pop", "reference_pop")], 1, sort))))
+  
+  alpha <- 0.05
+  sig_levels <- c("***", "**", "*", "")
+  
+  # Define significance labels based on p-values
+  llm_tables_significant_pariwise$significance <- cut(llm_tables_significant_pariwise$`p-value`, 
+                                                      breaks = c(-Inf, 0.001, 0.01, 0.05, Inf),
+                                                      labels = sig_levels,
+                                                      include.lowest = TRUE)
+  
+  #AIC AND ANOVA'S P-VALUE (it's the same for every comparison)
+  
+  # Subset data and set reference population
+  he_province <- processed_He_results[processed_He_results$geo == pop ,] %>%
+    mutate(population = factor(population, levels = population_levels))
+  
+  he.model.province <- lme(post_stat_med ~ population,
                            random = ~ 1 | locus,
                            data = he_province,
-                           na.action = na.omit,
-                           subset = as.numeric(contrasts[[i]]) != 0)
+                           na.action = na.omit)
   
-  # Extract fixed effects coefficients
-  coefficients <- fixef(he.model.pairwise)
+  anovap <- anova(he.model.province, type = "marginal")
+  aicval <- AIC(logLik(he.model.province))
   
-  # Calculate contrast estimate
-  contrast_estimate <- sum(contrasts[[i]] * coefficients)
   
-  # Extract residual standard error
-  residual_se <- summary(he.model.pairwise)$sigma
-  
-  # Calculate t-value
-  t_value <- contrast_estimate / residual_se
-  
-  # Degrees of freedom
-  df <- he.model.pairwise$fixDF$X["(Intercept)"]
-  
-  # Calculate p-value
-  p_value <- 2 * pt(abs(t_value), df = df, lower.tail = FALSE)
-  
-  # Store results
-  contrast_estimates[i] <- contrast_estimate
-  t_values[i] <- t_value
-  p_values[i] <- p_value
+  # Combine results
+  results <- list(plotCI = plotci,
+                  llm_tables_significant_pariwise = llm_tables_significant_pariwise,
+                  anovap = anovap,
+                  AIC = aicval)
+ 
+  return(results)
 }
+###
 
-# Print or further process the results
+# PROVINCES
+population_levels <- provinces
+results_list_provinces <- lapply(provinces, fit_and_collect_results, pop = "province")
+results_provinces <- analyze_results(results_list_provinces, pop = "province")
 
+#PREGIONS
+population_levels <- regions
+results_list_regions <- lapply(regions, fit_and_collect_results, pop = "region")
+results_regions <- analyze_results(results_list_regions, pop = "region")
 
 
 #######################################3
