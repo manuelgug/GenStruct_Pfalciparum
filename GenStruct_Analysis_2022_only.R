@@ -9,6 +9,7 @@ library(vegan)
 library(reshape2)
 library(RColorBrewer)
 library(Rtsne)
+library(ggpubr)
 
 # Objective 3: Describe genetic structure of P. falciparum population in Mozambique in 2021 and 2022 and investigate the origin of parasites with variants of concern
 
@@ -599,6 +600,7 @@ mcmc_results <- moire::run_mcmc(
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
   thin = 10); saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
 
+
 #######################################################
 # 7.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
@@ -653,7 +655,6 @@ polyclonal_percentage_province <- coi_results %>%
   ungroup()
 
 
-
 provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
@@ -662,6 +663,7 @@ coi_results$region <- factor(coi_results$region, levels = regions)
 coi_results_region$region <- factor(coi_results_region$region, levels = regions)
 polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
 polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
+
 
 a <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
@@ -677,6 +679,19 @@ a
 ggsave("naive_coi_provinces_ditros.png", a, width = 14, height = 6, bg = "white")
 
 
+#naive coi pairwise kruskal wallis provinces
+pairwise_province_naive_coi <- pairwise.wilcox.test(coi_results$naive_coi, 
+                                                    coi_results$province, p.adjust.method = "bonferroni")
+
+pairwise_province_naive_coi <- melt(pairwise_province_naive_coi[[3]])
+signif_p.pairwise_province_naive_coi<- pairwise_province_naive_coi[pairwise_province_naive_coi$value <0.05 & !is.na(pairwise_province_naive_coi$value),]
+
+
+pairwise_province_combinations <- lapply(1:nrow(signif_p.pairwise_province_naive_coi), function(i) {
+  as.character(c(signif_p.pairwise_province_naive_coi[i, "Var1"], 
+    signif_p.pairwise_province_naive_coi[i, "Var2"]))
+})
+
 a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
@@ -687,7 +702,9 @@ a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = region)) +
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "Naive COI") +
-  guides(color = FALSE) 
+  guides(color = FALSE)+
+  stat_compare_means(comparisons = pairwise_province_combinations, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 a1
 
@@ -707,6 +724,21 @@ b
 
 ggsave("naive_coi_regions_ditros.png", b, width = 14, height = 6, bg = "white")
 
+
+#naive coi pairwise kruskal wallis regions
+pairwise_region_naive_coi <- pairwise.wilcox.test(coi_results_region$naive_coi, 
+                                                  coi_results_region$region, p.adjust.method = "bonferroni")
+
+pairwise_region_naive_coi <- melt(pairwise_region_naive_coi[[3]])
+signif_p.pairwise_region_naive_coi<- pairwise_region_naive_coi[pairwise_region_naive_coi$value <0.05 & !is.na(pairwise_region_naive_coi$value),]
+
+
+pairwise_region_combinations <- lapply(1:nrow(signif_p.pairwise_region_naive_coi), function(i) {
+  as.character(c(signif_p.pairwise_region_naive_coi[i, "Var1"], 
+                 signif_p.pairwise_region_naive_coi[i, "Var2"]))
+})
+
+
 b1 <- ggplot(coi_results_region, aes(x = region, y = naive_coi, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
@@ -717,7 +749,9 @@ b1 <- ggplot(coi_results_region, aes(x = region, y = naive_coi, fill = region)) 
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "Naive COI") +
-  guides(color = FALSE) 
+  guides(color = FALSE) +
+  stat_compare_means(comparisons = pairwise_region_combinations, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 b1
 
@@ -738,6 +772,19 @@ c
 
 ggsave("ecoi_provinces_ditros.png", c, width = 14, height = 6, bg = "white")
 
+
+#ecoi pairwise kruskal wallis provinces
+pairwise_province_ecoi <- pairwise.wilcox.test(coi_results$post_effective_coi_med, 
+                                               coi_results$province, p.adjust.method = "bonferroni")
+
+pairwise_province_ecoi <- melt(pairwise_province_ecoi[[3]])
+signif_p.pairwise_province_ecoi<- pairwise_province_ecoi[pairwise_province_ecoi$value <0.05 & !is.na(pairwise_province_ecoi$value),]
+
+pairwise_province_combinations <- lapply(1:nrow(signif_p.pairwise_province_ecoi), function(i) {
+  as.character(c(signif_p.pairwise_province_ecoi[i, "Var1"], 
+                 signif_p.pairwise_province_ecoi[i, "Var2"]))
+})
+
 c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
@@ -748,7 +795,9 @@ c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = r
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "eCOI") +
-  guides(color = FALSE) 
+  guides(color = FALSE) +
+  stat_compare_means(comparisons = pairwise_province_combinations, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 c1
 
@@ -770,6 +819,19 @@ d
 ggsave("ecoi_regions_ditros.png", d, width = 10, height = 6, bg = "white")
 
 
+#ecoi pairwise kruskal wallis regions
+pairwise_region_ecoi <- pairwise.wilcox.test(coi_results_region$post_effective_coi_med, 
+                                             coi_results_region$region, p.adjust.method = "bonferroni")
+
+pairwise_region_ecoi <- melt(pairwise_region_ecoi[[3]])
+signif_p.pairwise_region_ecoi<- pairwise_region_ecoi[pairwise_region_ecoi$value <0.05 & !is.na(pairwise_region_ecoi$value),]
+
+pairwise_region_combinations <- lapply(1:nrow(signif_p.pairwise_region_ecoi), function(i) {
+  as.character(c(signif_p.pairwise_region_ecoi[i, "Var1"], 
+                 signif_p.pairwise_region_ecoi[i, "Var2"]))
+})
+
+
 d1 <- ggplot(coi_results_region, aes(x = region, y = post_effective_coi_med, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
@@ -780,43 +842,15 @@ d1 <- ggplot(coi_results_region, aes(x = region, y = post_effective_coi_med, fil
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "eCOI") +
-  guides(color = FALSE) 
+  guides(color = FALSE) +
+  stat_compare_means(comparisons = pairwise_region_combinations, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 d1
 
 ggsave("ecoi_region_violin.png", d1, width = 8, height = 6, bg = "white")
 
 
-## STATS KRUSKALL WALLIS PROVINCES
-#ecoi
-pairwise_province_ecoi <- pairwise.wilcox.test(coi_results$post_effective_coi_med, 
-                                                  coi_results$province, p.adjust.method = "bonferroni")
-
-pairwise_province_ecoi <- melt(pairwise_province_ecoi[[3]])
-signif_p.pairwise_province_ecoi<- pairwise_province_ecoi[pairwise_province_ecoi$value <0.05 & !is.na(pairwise_province_ecoi$value),]
-
-#naive coi
-pairwise_province_naive_coi <- pairwise.wilcox.test(coi_results$naive_coi, 
-                                               coi_results$province, p.adjust.method = "bonferroni")
-
-pairwise_province_naive_coi <- melt(pairwise_province_naive_coi[[3]])
-signif_p.pairwise_province_naive_coi<- pairwise_province_naive_coi[pairwise_province_naive_coi$value <0.05 & !is.na(pairwise_province_naive_coi$value),]
-
-
-## STATS KRUSKALL WALLIS REGIONS
-#ecoi
-pairwise_region_ecoi <- pairwise.wilcox.test(coi_results_region$post_effective_coi_med, 
-                                               coi_results_region$region, p.adjust.method = "bonferroni")
-
-pairwise_region_ecoi <- melt(pairwise_region_ecoi[[3]])
-signif_p.pairwise_region_ecoi<- pairwise_region_ecoi[pairwise_region_ecoi$value <0.05 & !is.na(pairwise_region_ecoi$value),]
-
-#naive coi
-pairwise_region_naive_coi <- pairwise.wilcox.test(coi_results_region$naive_coi, 
-                                                    coi_results_region$region, p.adjust.method = "bonferroni")
-
-pairwise_region_naive_coi <- melt(pairwise_region_naive_coi[[3]])
-signif_p.pairwise_region_naive_coi<- pairwise_region_naive_coi[pairwise_region_naive_coi$value <0.05 & !is.na(pairwise_region_naive_coi$value),]
 
 
 ##polyclonal percentage
@@ -1066,6 +1100,19 @@ regions <- c("North", "Centre", "South")
 mean_Fws_per_individual$province <- factor(mean_Fws_per_individual$province, levels = provinces)
 mean_Fws_per_individual$region <- factor(mean_Fws_per_individual$region, levels = regions)
 
+
+#naive coi pairwise kruskal wallis provinces
+pairwise_province_fws <- pairwise.wilcox.test(mean_Fws_per_individual$mean_indiv_fws_province, 
+                                              mean_Fws_per_individual$province, p.adjust.method = "bonferroni")
+
+pairwise_province_fws <- melt(pairwise_province_fws[[3]])
+signif_p.pairwise_province_fws<- pairwise_province_fws[pairwise_province_fws$value <0.05 & !is.na(pairwise_province_fws$value),]
+
+combos_pairwise_province_fws_province <- lapply(1:nrow(signif_p.pairwise_province_fws), function(i) {
+  as.character(c(signif_p.pairwise_province_fws[i, "Var1"], 
+                 signif_p.pairwise_province_fws[i, "Var2"]))
+})
+
 prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
@@ -1077,7 +1124,9 @@ prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws
   scale_fill_discrete(name = "Region") +  # Customize legend title
   #ggtitle("Province Connectivity") +
   labs(x = "Province", y = "Genome-wide 1-Fws") +
-  guides(color = FALSE) 
+  guides(color = FALSE) +
+  stat_compare_means(comparisons = combos_pairwise_province_fws_province, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 prov_fws
 
@@ -1085,6 +1134,17 @@ ggsave("province_fws.png", prov_fws, width = 8, height = 6, bg = "white")
 
 mean_Fws_per_individual_nodry <- mean_Fws_per_individual %>%
   filter(!grepl("Dry", province))
+
+pairwise_region_fws <- pairwise.wilcox.test(mean_Fws_per_individual_nodry$mean_indiv_fws_region, 
+                                            mean_Fws_per_individual_nodry$region, p.adjust.method = "bonferroni")
+
+pairwise_region_fws <- melt(pairwise_region_fws[[3]])
+signif_p.pairwise_region_fws<- pairwise_region_fws[pairwise_region_fws$value <0.05 & !is.na(pairwise_region_fws$value),]
+
+combos_pairwise_region_fws_province <- lapply(1:nrow(signif_p.pairwise_region_fws), function(i) {
+  as.character(c(signif_p.pairwise_region_fws[i, "Var1"], 
+                 signif_p.pairwise_region_fws[i, "Var2"]))
+})
 
 reg_fws <- ggplot(mean_Fws_per_individual_nodry, aes(x = region, y = mean_indiv_fws_region, fill = region)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
@@ -1095,29 +1155,13 @@ reg_fws <- ggplot(mean_Fws_per_individual_nodry, aes(x = region, y = mean_indiv_
     axis.text.x = element_text(angle = 45, hjust = 1)
   ) +
   labs(x = "", y = "Genome-wide 1-Fws") +
-  guides(fill = FALSE, color = FALSE) 
+  guides(fill = FALSE, color = FALSE) +
+  stat_compare_means(comparisons = combos_pairwise_region_fws_province, aes(label = after_stat(p.signif)),
+                     method = "wilcox.test")
 
 reg_fws
 
 ggsave("region_fws.png", reg_fws, width = 8, height = 6, bg = "white")
-
-
-
-#STAT ANAL 1-FWS PROVINCES
-pairwise_province_fws <- pairwise.wilcox.test(mean_Fws_per_individual$mean_indiv_fws_province, 
-                                                    mean_Fws_per_individual$province, p.adjust.method = "bonferroni")
-
-pairwise_province_fws <- melt(pairwise_province_fws[[3]])
-signif_p.pairwise_province_fws<- pairwise_province_fws[pairwise_province_fws$value <0.05 & !is.na(pairwise_province_fws$value),]
-
-#STAT ANAL 1-FWS REGIONS
-pairwise_region_fws <- pairwise.wilcox.test(mean_Fws_per_individual_nodry$mean_indiv_fws_region, 
-                                              mean_Fws_per_individual_nodry$region, p.adjust.method = "bonferroni")
-
-pairwise_region_fws <- melt(pairwise_region_fws[[3]])
-signif_p.pairwise_region_fws<- pairwise_region_fws[pairwise_region_fws$value <0.05 & !is.na(pairwise_region_fws$value),]
-
-
 
 
 # # STATISTICAL ANALYSES
@@ -1183,78 +1227,78 @@ combined_data_region <- rbind(data.frame(He_region = processed_He_results[proces
 # signif_p.val_region_He_2022 <- p.val_region_He_2022[p.val_region_He_2022$value <0.05 & !is.na(p.val_region_He_2022$value),]
 
 
-# Changes in He distributions and means by year
-
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-regions <- c("North", "Centre", "South")
-
-combined_data_province$province <- factor(combined_data_province$province, levels = provinces)
-combined_data_region$region <- factor(combined_data_region$region, levels = regions)
-
-#provinces
-mean_data <- combined_data_province %>%
-  group_by(province) %>%
-  summarize(mean_He = mean(He_province, na.rm = TRUE),
-            median_He = median(He_province, na.rm = TRUE))
-
-p1 <- ggplot(combined_data_province, aes(x = He_province)) +
-  geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
-  geom_vline(data = mean_data, aes(xintercept = median_He), linetype = "solid", color = "orange") +
-  labs(title = "Province Heterozygosity",
-       x = "Genome-wide He",
-       y = "Frequency") +
-  facet_wrap(~ province) +
-  theme_minimal()
-
-p1
-
-p2 <- ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
-  geom_violin(width = 1, aes(color = province), alpha = 0.4) +
-  geom_boxplot(width = 0.1, aes(color = province), fill = "white", alpha = 0.4) +
-  labs(x = "", y = "Genome-wide He") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Adjust x-axis label angle
-  guides(fill = FALSE, color = FALSE)
-
-p2
-
-library(cowplot)
-combined_plot_prov <- plot_grid(p1, p2, ncol = 2)
-
-ggsave("province_He.png", combined_plot_prov, width = 16, height = 8, bg = "white")
-
-#regions
-mean_data_region <- combined_data_region %>%
-  group_by(region) %>%
-  summarize(mean_He = mean(He_region, na.rm = TRUE),
-            median_He = median(He_region, na.rm = TRUE))
-
-p3 <- ggplot(combined_data_region, aes(x = He_region)) +
-  geom_histogram(alpha = 0.7, bins = 30) +
-  geom_vline(data = mean_data_region, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
-  geom_vline(data = mean_data_region, aes(xintercept = median_He), linetype = "solid", color = "orange") +
-  labs(title = "Region Heterozygosity",
-       x = "He",
-       y = "Frequency") +
-  facet_wrap(~ region) +
-  theme_minimal()
-
-p3
-
-p4 <- ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
-  geom_violin(width = 1, aes(color = region), alpha = 0.4) +
-  geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
-  labs(x = "", y = "Mean Genome-wide He") +
-  theme_minimal()+
-  guides(fill = FALSE, color =FALSE)
-
-p4
-
-combined_plot_region <- plot_grid(p3, p4, ncol = 2)
-
-ggsave("region_He.png", combined_plot_region, width = 16, height = 8, bg = "white")
-
+# # Changes in He distributions and means by year
+# 
+# provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+# regions <- c("North", "Centre", "South")
+# 
+# combined_data_province$province <- factor(combined_data_province$province, levels = provinces)
+# combined_data_region$region <- factor(combined_data_region$region, levels = regions)
+# 
+# #provinces
+# mean_data <- combined_data_province %>%
+#   group_by(province) %>%
+#   summarize(mean_He = mean(He_province, na.rm = TRUE),
+#             median_He = median(He_province, na.rm = TRUE))
+# 
+# p1 <- ggplot(combined_data_province, aes(x = He_province)) +
+#   geom_histogram(alpha = 0.7, bins = 30) +
+#   geom_vline(data = mean_data, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
+#   geom_vline(data = mean_data, aes(xintercept = median_He), linetype = "solid", color = "orange") +
+#   labs(title = "Province Heterozygosity",
+#        x = "Genome-wide He",
+#        y = "Frequency") +
+#   facet_wrap(~ province) +
+#   theme_minimal()
+# 
+# p1
+# 
+# p2 <- ggplot(combined_data_province, aes(x = province, y = He_province, fill = province)) +
+#   geom_violin(width = 1, aes(color = province), alpha = 0.4) +
+#   geom_boxplot(width = 0.1, aes(color = province), fill = "white", alpha = 0.4) +
+#   labs(x = "", y = "Genome-wide He") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Adjust x-axis label angle
+#   guides(fill = FALSE, color = FALSE)
+# 
+# p2
+# 
+# library(cowplot)
+# combined_plot_prov <- plot_grid(p1, p2, ncol = 2)
+# 
+# ggsave("province_He.png", combined_plot_prov, width = 16, height = 8, bg = "white")
+# 
+# #regions
+# mean_data_region <- combined_data_region %>%
+#   group_by(region) %>%
+#   summarize(mean_He = mean(He_region, na.rm = TRUE),
+#             median_He = median(He_region, na.rm = TRUE))
+# 
+# p3 <- ggplot(combined_data_region, aes(x = He_region)) +
+#   geom_histogram(alpha = 0.7, bins = 30) +
+#   geom_vline(data = mean_data_region, aes(xintercept = mean_He), linetype = "solid", color = "limegreen") +
+#   geom_vline(data = mean_data_region, aes(xintercept = median_He), linetype = "solid", color = "orange") +
+#   labs(title = "Region Heterozygosity",
+#        x = "He",
+#        y = "Frequency") +
+#   facet_wrap(~ region) +
+#   theme_minimal()
+# 
+# p3
+# 
+# p4 <- ggplot(combined_data_region, aes(x = region, y = He_region, fill = region)) +
+#   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
+#   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
+#   labs(x = "", y = "Mean Genome-wide He") +
+#   theme_minimal()+
+#   guides(fill = FALSE, color =FALSE)
+# 
+# p4
+# 
+# combined_plot_region <- plot_grid(p3, p4, ncol = 2)
+# 
+# ggsave("region_He.png", combined_plot_region, width = 16, height = 8, bg = "white")
+# 
 
 
 ## linear mixed models to assess difference in He (from Nanna's scripts)
@@ -2002,8 +2046,6 @@ ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 6, bg = "white
 # ggsave("fst_heatmap_regions.png", heatmap_2022_regions, width = 8, height = 6, bg = "white")
 
 
-
-
 # #bootstraping analysis (interchangeable with llm) USING THIS
 # library(boot)
 # library(boot.pval)
@@ -2511,11 +2553,16 @@ library(geosphere)
 rows_to_remove <- grepl("Dry", rownames(rearranged_processed_allele_freq_results_province))
 rearranged_processed_allele_freq_results_province_nodry <- rearranged_processed_allele_freq_results_province[!rows_to_remove, ]
 
+#reorder rows
+desired_order <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy")
+indices <- match(desired_order, rownames(rearranged_processed_allele_freq_results_province_nodry))
+rearranged_processed_allele_freq_results_province_nodry <- rearranged_processed_allele_freq_results_province_nodry[indices, ]
+
 #calculate distances
 bray_curtis_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "bray", diag = T, upper = T)
-manhattan_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "manhattan", diag = T, upper = T)
-euclidean_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "euclidean", diag = T, upper = T)
-gower_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "gower", diag = T, upper = T)
+# manhattan_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "manhattan", diag = T, upper = T)
+# euclidean_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "euclidean", diag = T, upper = T)
+# gower_dist <- vegdist(rearranged_processed_allele_freq_results_province_nodry, method = "gower", diag = T, upper = T)
 
 # not actual coordinates??
 coordinates <- data.frame(
@@ -2533,6 +2580,7 @@ colnames(geo_dist) <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete",
 
 #mantel test fucntion to test multiple distance metrics
 perform_mantel_test <- function(distance, geo_dist) {
+  
   # Perform Mantel test
   mantel_result <- mantel(distance, geo_dist, method = "spearman", permutations = 10000)
   
@@ -2551,14 +2599,14 @@ perform_mantel_test <- function(distance, geo_dist) {
     geom_point(size = 4, alpha = 0.75, colour = "black", shape = 21, aes(fill = geo / 1000)) + 
     geom_smooth(method = "lm", colour = "black", alpha = 0.2) + 
     labs(x = "Harvesine Distance", y = "Bray-Curtis Dissimilarity", fill = "Kilometers") + 
-    theme(axis.text.x = element_text(face = "bold", colour = "black", size = 12), 
-          axis.text.y = element_text(face = "bold", size = 11, colour = "black"), 
-          axis.title = element_text(face = "bold", size = 14, colour = "black"), 
+    theme(axis.text.x = element_text(colour = "black", size = 12), 
+          axis.text.y = element_text(size = 11, colour = "black"), 
+          axis.title = element_text(size = 14, colour = "black"), 
           panel.background = element_blank(), 
           panel.border = element_rect(fill = NA, colour = "black"),
           legend.position = "right",
-          legend.text = element_text(size = 10, face = "bold"),
-          legend.title = element_text(size = 11, face = "bold")) +
+          legend.text = element_text(size = 10),
+          legend.title = element_text(size = 11)) +
     scale_fill_continuous(high = "navy", low = "skyblue")
   
   # Return Mantel test result and the scatter plot
@@ -2587,12 +2635,34 @@ combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_m
 #add VOC
 combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
 combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhfr_tr_95_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_436_b")], by = "NIDA2")
+combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_581_b")], by = "NIDA2")
+
 
 combined_df_merged$VOC <- ifelse(combined_df_merged$dhps_doub_95_b == 1 & combined_df_merged$dhfr_tr_95_b == 1, "dhps_d_dhfr_tr",
                                  ifelse(combined_df_merged$dhfr_tr_95_b == 1 & combined_df_merged$dhps_doub_95_b == 0, "dhfr_tr",
                                         ifelse(combined_df_merged$dhfr_tr_95_b == 0 & combined_df_merged$dhps_doub_95_b == 1, "dhps_d", "WT")))
 
+#no_genotype
 combined_df_merged$VOC <- ifelse(is.na(combined_df_merged$VOC), "no_genotype", combined_df_merged$VOC)
+
+#436 581 genotypes
+# Replace 0 with WT, 1 with mut, 2 with mix, and NA with no_Genotype in dhps_436
+combined_df_merged$dhps_436 <- ifelse(combined_df_merged$dhps_436 == 0, "WT",
+                                      ifelse(combined_df_merged$dhps_436 == 1, "mut",
+                                             ifelse(combined_df_merged$dhps_436 == 2, "mix", "no_genotype")))
+
+# Replace 0 with WT, 1 with mut, 2 with mix, and NA with no_Genotype in dhps_581
+combined_df_merged$dhps_581 <- ifelse(combined_df_merged$dhps_581 == 0, "WT",
+                                      ifelse(combined_df_merged$dhps_581 == 1, "mut",
+                                             ifelse(combined_df_merged$dhps_581 == 2, "mix", "no_genotype")))
+
+combined_df_merged$VOC_436_581 <- paste0("dhps_436", "-", combined_df_merged$dhps_436, "_", "581", "-", combined_df_merged$dhps_581)
+
+combined_df_merged$VOC_436_581 <- gsub("dhps_436-NA_581-NA", "no_genotype", combined_df_merged$VOC_436_581 )
+combined_df_merged$VOC_436_581 <- gsub("dhps_436-WT_581-WT", "WT", combined_df_merged$VOC_436_581 )
+
+unique(combined_df_merged$VOC_436_581)
 
 library(dcifer)
 pardef <- par(no.readonly = TRUE)
