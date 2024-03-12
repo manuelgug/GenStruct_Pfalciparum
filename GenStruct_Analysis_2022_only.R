@@ -1608,91 +1608,166 @@ calculate_FST <- function(data, indices) {
   return(FST)
 }
 
-
-library(boot)
-library(boot.pval)
-
-# Create a list to store bootstrap results
-bootstrap_results <- list()
-
-# Loop through each pairwise comparison
-for (i in 1:nrow(combinations)) {
-  pop1 <- as.character(combinations$pop1[i])
-  pop2 <- as.character(combinations$pop2[i])
-  
-  # Subset data for the current pairwise comparison
-  pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
-  
-  # Define a unique name for the pairwise comparison
-  comparison_name <- paste(pop1, pop2, sep = "_vs_")
-  
-  # Perform bootstrap resampling
-  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
-}
+#for each locus, just in case it's needed
+fst_results_df$Fst <- (fst_results_df$Ht - fst_results_df$Hs)/fst_results_df$Ht
 
 
-# Calculate the mean of bootstrap replicates for each pairwise comparison
-mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+#llm (interchangeable with boostrat analysis)
+library(nlme)
 
-p_value <- data.frame()
+FST_LLM <- as.data.frame(cbind(pop1 =fst_results_df$pop1,
+                               pop2 = fst_results_df$pop2,
+                               comparison = paste0(fst_results_df$pop1, "_",fst_results_df$pop2),
+                               locus = fst_results_df$locus,
+                               fst = as.numeric(fst_results_df$Fst)))
 
-for (i in seq(1:length(bootstrap_results))){
-  p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
-  p_value <- rbind(p_value, p)
-}
 
-colnames(p_value)<- "p_value"
+FST_LLM$fst <- as.numeric(FST_LLM$fst)
 
-# Create a function to extract confidence intervals for the mean
-get_mean_confidence_intervals <- function(bootstrap_result) {
-  ci <- boot.ci(bootstrap_result, type = "perc")
-  lower_limit <- ci$percent[4]
-  upper_limit <- ci$percent[5]
-  return(c(lower_limit, upper_limit))
-}
+fst.model.region <- lme(fst ~ comparison,
+                        random = ~ 1 | locus,
+                        data = FST_LLM,
+                        na.action = na.omit)
 
-# Extract confidence intervals for the mean of FST
-mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+summary_data <- summary(fst.model.region)
+summary_table <- as.data.frame(summary_data$tTable)
+summary_table <- unique(summary_table)
+summary_table$comparison <-  rownames(summary_table)
 
-# Create a data frame to store the results
-mean_FST_df <- data.frame(
-  pairwise_comparisons = names(mean_FST),
-  mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
-  lower_limit = sapply(mean_confidence_intervals, `[`, 1),
-  upper_limit = sapply(mean_confidence_intervals, `[`, 2),
-  p_val = p_value
-)
+dim(summary_table)
 
-# Remove "_2022" from population names and reorder according to the specified order
-#mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+cis <- intervals(fst.model.region, which = "fixed")
+cis <- as.data.frame(cis$fixed)
+cis <- unique(cis)
+cis$comparison <-  rownames(cis)
 
-# Exclude rows with 0 in the last three columns
-mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+dim(cis)
 
-#exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
-mean_FST_df_filtered<- mean_FST_df_filtered %>%
-  distinct(mean_FST, .keep_all = TRUE)
+#merge estimates with CIs
+final_table<- merge(cis, summary_table, by = c("comparison"))
 
-# Reorder pairwise_comparisons based on mean_FST
-mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
-                                                    levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+final_table$comparison <- gsub("comparison", "", final_table$comparison)
 
-# Add a column indicating significance
-mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+#significance
+final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
 
-# Plot with significance indication
-fst_regions <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
-  geom_boxplot() +
-  geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
-  scale_color_manual(values = c("red")) +  # Set colors for significance levels
-  labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  theme_minimal() +
+final_table <- final_table %>%
+  arrange(`est.`)
+
+#keep fst > 0 only
+final_table <- final_table[final_table$est. > 0.000001,]
+
+# Create logical index to keep every other row
+keep_rows <- seq(nrow(final_table)) %% 2 == 1
+
+# Subset final_table to keep every other row
+final_table <- final_table[keep_rows, ]
+
+final_table <- final_table %>%
+  mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
+
+ggplot(final_table, aes(x = comparison, y = est., color = significance)) +
+  # Add the center point
+  geom_point() +
+  # Add the error bars for confidence intervals
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  # Adjust the appearance
+  labs(title = "",
+       x = "",
+       y = "Fst Estimate") +
+  scale_color_manual(values = c("black", "red")) +
+  theme_minimal()+
   coord_flip()
 
-fst_regions
+anovap <- anova(fst.model.region, type = "marginal")
+aicval <- AIC(logLik(fst.model.region))
 
-ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
+
+# #bootstraping analysis (interchangeable with llm) USING THIS
+# library(boot)
+# library(boot.pval)
+# 
+# # Create a list to store bootstrap results
+# bootstrap_results <- list()
+# 
+# # Loop through each pairwise comparison
+# for (i in 1:nrow(combinations)) {
+#   pop1 <- as.character(combinations$pop1[i])
+#   pop2 <- as.character(combinations$pop2[i])
+#   
+#   # Subset data for the current pairwise comparison
+#   pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
+#   
+#   # Define a unique name for the pairwise comparison
+#   comparison_name <- paste(pop1, pop2, sep = "_vs_")
+#   
+#   # Perform bootstrap resampling
+#   bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
+# }
+# 
+# 
+# # Calculate the mean of bootstrap replicates for each pairwise comparison
+# mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+# 
+# p_value <- data.frame()
+# 
+# for (i in seq(1:length(bootstrap_results))){
+#   p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
+#   p_value <- rbind(p_value, p)
+# }
+# 
+# colnames(p_value)<- "p_value"
+# 
+# # Create a function to extract confidence intervals for the mean
+# get_mean_confidence_intervals <- function(bootstrap_result) {
+#   ci <- boot.ci(bootstrap_result, type = "perc")
+#   lower_limit <- ci$percent[4]
+#   upper_limit <- ci$percent[5]
+#   return(c(lower_limit, upper_limit))
+# }
+# 
+# # Extract confidence intervals for the mean of FST
+# mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+# 
+# # Create a data frame to store the results
+# mean_FST_df <- data.frame(
+#   pairwise_comparisons = names(mean_FST),
+#   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
+#   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
+#   upper_limit = sapply(mean_confidence_intervals, `[`, 2),
+#   p_val = p_value
+# )
+# 
+# # Remove "_2022" from population names and reorder according to the specified order
+# #mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+# 
+# # Exclude rows with 0 in the last three columns
+# mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+# 
+# #exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
+# mean_FST_df_filtered<- mean_FST_df_filtered %>%
+#   distinct(mean_FST, .keep_all = TRUE)
+# 
+# # Reorder pairwise_comparisons based on mean_FST
+# mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
+#                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+# 
+# # Add a column indicating significance
+# mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+# 
+# # Plot with significance indication
+# fst_regions <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
+#   geom_boxplot() +
+#   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+#   scale_color_manual(values = c("red")) +  # Set colors for significance levels
+#   labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   theme_minimal() +
+#   coord_flip()
+# 
+# fst_regions
+# 
+# ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
@@ -1725,6 +1800,7 @@ heatmap_2022_regions <- create_heatmap(mean_FST_df)
 heatmap_2022_regions
 
 ggsave("fst_heatmap_regions.png", heatmap_2022_regions, width = 8, height = 6, bg = "white")
+
 
 
 #2) FOR PROVINCES
@@ -1804,90 +1880,166 @@ calculate_FST <- function(data, indices) {
   return(FST)
 }
 
-
-library(boot)
-library(boot.pval)
-
-# Create a list to store bootstrap results
-bootstrap_results <- list()
-
-# Loop through each pairwise comparison
-for (i in 1:nrow(combinations)) {
-  pop1 <- as.character(combinations$pop1[i])
-  pop2 <- as.character(combinations$pop2[i])
-  
-  # Subset data for the current pairwise comparison
-  pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
-  
-  # Define a unique name for the pairwise comparison
-  comparison_name <- paste(pop1, pop2, sep = "_vs_")
-  
-  # Perform bootstrap resampling
-  bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
-}
+#for each locus, just in case it's needed
+fst_results_df$Fst <- (fst_results_df$Ht - fst_results_df$Hs)/fst_results_df$Ht
 
 
-# Calculate the mean of bootstrap replicates for each pairwise comparison
-mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+#llm (interchangeable with boostrat analysis)
+library(nlme)
 
-p_value <- data.frame()
+FST_LLM <- as.data.frame(cbind(pop1 =fst_results_df$pop1,
+                               pop2 = fst_results_df$pop2,
+                               comparison = paste0(fst_results_df$pop1, "_",fst_results_df$pop2),
+                               locus = fst_results_df$locus,
+                               fst = as.numeric(fst_results_df$Fst)))
 
-for (i in seq(1:length(bootstrap_results))){
-  p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
-  p_value <- rbind(p_value, p)
-}
 
-colnames(p_value)<- "p_value"
+FST_LLM$fst <- as.numeric(FST_LLM$fst)
 
-# Create a function to extract confidence intervals for the mean
-get_mean_confidence_intervals <- function(bootstrap_result) {
-  ci <- boot.ci(bootstrap_result, type = "perc")
-  lower_limit <- ci$percent[4]
-  upper_limit <- ci$percent[5]
-  return(c(lower_limit, upper_limit))
-}
+fst.model.region <- lme(fst ~ comparison,
+                        random = ~ 1 | locus,
+                        data = FST_LLM,
+                        na.action = na.omit)
 
-# Extract confidence intervals for the mean of FST
-mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+summary_data <- summary(fst.model.region)
+summary_table <- as.data.frame(summary_data$tTable)
+summary_table <- unique(summary_table)
+summary_table$comparison <-  rownames(summary_table)
 
-# Create a data frame to store the results
-mean_FST_df <- data.frame(
-  pairwise_comparisons = names(mean_FST),
-  mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
-  lower_limit = sapply(mean_confidence_intervals, `[`, 1),
-  upper_limit = sapply(mean_confidence_intervals, `[`, 2),
-  p_val = p_value
-)
+dim(summary_table)
 
-# Remove "_2022" from population names and reorder according to the specified order
-#mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+cis <- intervals(fst.model.region, which = "fixed")
+cis <- as.data.frame(cis$fixed)
+cis <- unique(cis)
+cis$comparison <-  rownames(cis)
 
-# Exclude rows with 0 in the last three columns
-mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+dim(cis)
 
-#exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
-mean_FST_df_filtered<- mean_FST_df_filtered %>%
-  distinct(mean_FST, .keep_all = TRUE)
+#merge estimates with CIs
+final_table<- merge(cis, summary_table, by = c("comparison"))
 
-# Reorder pairwise_comparisons based on mean_FST
-mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
-                                                    levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
-# Add a column indicating significance
-mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+final_table$comparison <- gsub("comparison", "", final_table$comparison)
 
-# Plot with significance indication
-fst_provinces <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
-  geom_boxplot() +
-  geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
-  scale_color_manual(values = c("black", "red")) +  # Set colors for significance levels
-  labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  theme_minimal() +
+#significance
+final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
+
+final_table <- final_table %>%
+  arrange(`est.`)
+
+#keep fst > 0 only
+final_table <- final_table[final_table$est. > 0.000001,]
+
+# Create logical index to keep every other row
+keep_rows <- seq(nrow(final_table)) %% 2 == 1
+
+# Subset final_table to keep every other row
+final_table <- final_table[keep_rows, ]
+
+final_table <- final_table %>%
+  mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
+
+ggplot(final_table, aes(x = comparison, y = est., color = significance)) +
+  # Add the center point
+  geom_point() +
+  # Add the error bars for confidence intervals
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  # Adjust the appearance
+  labs(title = "",
+       x = "",
+       y = "Fst Estimate") +
+  scale_color_manual(values = c("black", "red")) +
+  theme_minimal()+
   coord_flip()
 
-fst_provinces
+anovap <- anova(fst.model.region, type = "marginal")
+aicval <- AIC(logLik(fst.model.region))
 
-ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 10, bg = "white")
+
+
+# #bootstraping analysis (interchangeable with llm) USING THIS
+# library(boot)
+# library(boot.pval)
+# 
+# # Create a list to store bootstrap results
+# bootstrap_results <- list()
+# 
+# # Loop through each pairwise comparison
+# for (i in 1:nrow(combinations)) {
+#   pop1 <- as.character(combinations$pop1[i])
+#   pop2 <- as.character(combinations$pop2[i])
+#   
+#   # Subset data for the current pairwise comparison
+#   pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
+#   
+#   # Define a unique name for the pairwise comparison
+#   comparison_name <- paste(pop1, pop2, sep = "_vs_")
+#   
+#   # Perform bootstrap resampling
+#   bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
+# }
+# 
+# 
+# # Calculate the mean of bootstrap replicates for each pairwise comparison
+# mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+# 
+# p_value <- data.frame()
+# 
+# for (i in seq(1:length(bootstrap_results))){
+#   p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
+#   p_value <- rbind(p_value, p)
+# }
+# 
+# colnames(p_value)<- "p_value"
+# 
+# # Create a function to extract confidence intervals for the mean
+# get_mean_confidence_intervals <- function(bootstrap_result) {
+#   ci <- boot.ci(bootstrap_result, type = "perc")
+#   lower_limit <- ci$percent[4]
+#   upper_limit <- ci$percent[5]
+#   return(c(lower_limit, upper_limit))
+# }
+# 
+# # Extract confidence intervals for the mean of FST
+# mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+# 
+# # Create a data frame to store the results
+# mean_FST_df <- data.frame(
+#   pairwise_comparisons = names(mean_FST),
+#   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
+#   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
+#   upper_limit = sapply(mean_confidence_intervals, `[`, 2),
+#   p_val = p_value
+# )
+# 
+# # Remove "_2022" from population names and reorder according to the specified order
+# #mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+# 
+# # Exclude rows with 0 in the last three columns
+# mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+# 
+# #exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
+# mean_FST_df_filtered<- mean_FST_df_filtered %>%
+#   distinct(mean_FST, .keep_all = TRUE)
+# 
+# # Reorder pairwise_comparisons based on mean_FST
+# mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
+#                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+# # Add a column indicating significance
+# mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+
+# Plot with significance indication
+# fst_provinces <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
+#   geom_boxplot() +
+#   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+#   scale_color_manual(values = c("black", "red")) +  # Set colors for significance levels
+#   labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   theme_minimal() +
+#   coord_flip()
+# 
+# fst_provinces
+# 
+# ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 10, bg = "white")
 
 # Create heatmap for regions comparisons
 create_heatmap <- function(data, title) {
