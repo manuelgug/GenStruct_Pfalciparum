@@ -1507,7 +1507,6 @@ sample_size_provinces
 # sample_size_regions$pop <- sample_size_regions$region
 # sample_size_regions
 
-
 combined_df_merged_nodry <- combined_df_merged %>%
   filter(!grepl("Dry", province))
 
@@ -1525,10 +1524,7 @@ sample_size_regions
 # THIS IS DONE FOR EACH LOCUS
 
 # 1.- calculate Hs and Ht for each locus
-# 2.- calculate Fst [(Ht - Hs) / Ht] resampling loci to get confidence intervals (95%; 2.5 and 97.5 percentiles)
-# 3.- plot mean genome-wide Fst with mean confidence intervals
-
-# Ideas: use only loci with highest He to make the CI lower?
+# 2.- calculate Fst [(Ht - Hs) / Ht] through a Linear Mixed Model
 
 
 ### 1) FOR REGIONS
@@ -1583,9 +1579,7 @@ if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_regions$l
   print("grab a coffee.")
 }
 
-
 fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
-
 
 #calculate Hs for populations PER LOCUS
 fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
@@ -1661,12 +1655,14 @@ regions <- rev(regions)
 final_table$pop1 <- factor(final_table$pop1, levels = regions)
 final_table$pop2 <- factor(final_table$pop2, levels = regions)
 
-ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
+heatmap_regions <- ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
   geom_tile() +
   geom_text(color = "black") +
   scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(final_table$He_estimate), max(final_table$He_estimate))) +  # Adjust scale limits
   theme_minimal() +
   labs(x = "", y = "")
+
+heatmap_regions
 
 #significance
 final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
@@ -1674,7 +1670,7 @@ final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "no
 final_table <- final_table %>%
   arrange(`est.`)
 
-#keep fst > 0 only
+#keep fst > 0
 final_table <- final_table[final_table$est. > 0.000001,]
 
 # Create logical index to keep every other row
@@ -1686,7 +1682,7 @@ final_table <- final_table[keep_rows, ]
 final_table <- final_table %>%
   mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
 
-ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
+fst_regions <- ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
   # Add the center point
   geom_point() +
   # Add the error bars for confidence intervals
@@ -1699,8 +1695,13 @@ ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)
   theme_minimal()+
   coord_flip()
 
+fst_regions
+
 anovap <- anova(fst.model.region, type = "marginal")
 aicval <- AIC(logLik(fst.model.region))
+
+ggsave("fst_heatmap_regions.png", heatmap_regions, width = 8, height = 6, bg = "white")
+ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
 
 
 ### 2) FOR PROVINCES
@@ -1758,7 +1759,6 @@ if (nrow(fst_results_df) == nrow(combinations)*length(unique(fts_input_provinces
 
 fst_results_df <- fst_results_df[complete.cases(fst_results_df), ] # remove NA rows (those on which the amplicon wasn't present in both populations, hence Fst can't be calculated)
 
-
 #calculate Hs for populations PER LOCUS
 fst_results_df$Hs <- (fst_results_df$Hs1 + fst_results_df$Hs2) / 2
 fst_results_df$Hs <- round(as.numeric(fst_results_df$Hs),3)
@@ -1793,7 +1793,6 @@ FST_LLM <- as.data.frame(cbind(pop1 =fst_results_df$pop1,
                                comparison = paste0(fst_results_df$pop1, "_",fst_results_df$pop2),
                                locus = fst_results_df$locus,
                                fst = as.numeric(fst_results_df$Fst)))
-
 
 FST_LLM$fst <- as.numeric(FST_LLM$fst)
 
@@ -1834,12 +1833,14 @@ provinces <- rev(provinces)
 final_table$pop1 <- factor(final_table$pop1, levels = provinces)
 final_table$pop2 <- factor(final_table$pop2, levels = provinces)
 
-ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
+heatmap_provinces <- ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
   geom_tile() +
   geom_text(color = "black") +
   scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(final_table$He_estimate), max(final_table$He_estimate))) +  # Adjust scale limits
   theme_minimal() +
   labs(x = "", y = "")
+
+heatmap_provinces
 
 #significance
 final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
@@ -1847,7 +1848,7 @@ final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "no
 final_table <- final_table %>%
   arrange(`est.`)
 
-#keep fst > 0 only
+#keep fst > 0 
 final_table <- final_table[final_table$est. > 0.000001,]
 
 # Create logical index to keep every other row
@@ -1859,7 +1860,7 @@ final_table <- final_table[keep_rows, ]
 final_table <- final_table %>%
   mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
 
-ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
+fst_provinces <- ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
   # Add the center point
   geom_point() +
   # Add the error bars for confidence intervals
@@ -1872,26 +1873,13 @@ ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)
   theme_minimal()+
   coord_flip()
 
+fst_provinces
+
 anovap <- anova(fst.model.region, type = "marginal")
 aicval <- AIC(logLik(fst.model.region))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ggsave("fst_heatmap_provinces.png", heatmap_provinces, width = 12, height = 10, bg = "white")
+ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 6, bg = "white")
 
 
 
