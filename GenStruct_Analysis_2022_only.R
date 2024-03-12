@@ -1358,9 +1358,9 @@ analyze_results <- function(results_list, pop = "region") {
     # Add the error bars for confidence intervals
     geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "black") +
     # Adjust the appearance
-    labs(title = "Center and Confidence Intervals for Compared Populations",
-         x = "Compared Population",
-         y = "Estimate") +
+    labs(title = "",
+         x = "",
+         y = "He Estimate") +
     theme_minimal()+
     coord_flip()
   
@@ -1531,7 +1531,8 @@ sample_size_regions
 # Ideas: use only loci with highest He to make the CI lower?
 
 
-#1) FOR REGIONS
+### 1) FOR REGIONS
+
 fts_input_regions <- merge(processed_He_results_regions[c("locus", "post_stat_mean", "pop")], sample_size_regions[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
 # Generate all possible combinations of unique values
@@ -1645,8 +1646,27 @@ dim(cis)
 
 #merge estimates with CIs
 final_table<- merge(cis, summary_table, by = c("comparison"))
-
 final_table$comparison <- gsub("comparison", "", final_table$comparison)
+final_table <- unique(merge(final_table, FST_LLM[c("pop1", "pop2", "comparison")], by = c("comparison")))
+
+#heatmap
+final_table$He_estimate<- round(final_table$est., 3)
+final_table <- complete(final_table, pop1, pop2, fill = list(He_estimate = 0, `p-value` = 1))
+final_table$He_estimate<- ifelse(final_table$He_estimate < 0, 0, final_table$He_estimate) #TURN NEGATIVE VALUES TO 0
+final_table$label <- ifelse(final_table$`p-value` < 0.05 & final_table$He_estimate > 0 , paste0(final_table$He_estimate, "*"), as.character(final_table$He_estimate))
+
+regions <- c("North", "Centre", "South") #ordered from north to south
+regions <- rev(regions)
+
+final_table$pop1 <- factor(final_table$pop1, levels = regions)
+final_table$pop2 <- factor(final_table$pop2, levels = regions)
+
+ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
+  geom_tile() +
+  geom_text(color = "black") +
+  scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(final_table$He_estimate), max(final_table$He_estimate))) +  # Adjust scale limits
+  theme_minimal() +
+  labs(x = "", y = "")
 
 #significance
 final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
@@ -1666,14 +1686,14 @@ final_table <- final_table[keep_rows, ]
 final_table <- final_table %>%
   mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
 
-ggplot(final_table, aes(x = comparison, y = est., color = significance)) +
+ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
   # Add the center point
   geom_point() +
   # Add the error bars for confidence intervals
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   # Adjust the appearance
   labs(title = "",
-       x = "",
+       x = "Pairwise comparisons",
        y = "Fst Estimate") +
   scale_color_manual(values = c("black", "red")) +
   theme_minimal()+
@@ -1683,127 +1703,8 @@ anovap <- anova(fst.model.region, type = "marginal")
 aicval <- AIC(logLik(fst.model.region))
 
 
-# #bootstraping analysis (interchangeable with llm) USING THIS
-# library(boot)
-# library(boot.pval)
-# 
-# # Create a list to store bootstrap results
-# bootstrap_results <- list()
-# 
-# # Loop through each pairwise comparison
-# for (i in 1:nrow(combinations)) {
-#   pop1 <- as.character(combinations$pop1[i])
-#   pop2 <- as.character(combinations$pop2[i])
-#   
-#   # Subset data for the current pairwise comparison
-#   pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
-#   
-#   # Define a unique name for the pairwise comparison
-#   comparison_name <- paste(pop1, pop2, sep = "_vs_")
-#   
-#   # Perform bootstrap resampling
-#   bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
-# }
-# 
-# 
-# # Calculate the mean of bootstrap replicates for each pairwise comparison
-# mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
-# 
-# p_value <- data.frame()
-# 
-# for (i in seq(1:length(bootstrap_results))){
-#   p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
-#   p_value <- rbind(p_value, p)
-# }
-# 
-# colnames(p_value)<- "p_value"
-# 
-# # Create a function to extract confidence intervals for the mean
-# get_mean_confidence_intervals <- function(bootstrap_result) {
-#   ci <- boot.ci(bootstrap_result, type = "perc")
-#   lower_limit <- ci$percent[4]
-#   upper_limit <- ci$percent[5]
-#   return(c(lower_limit, upper_limit))
-# }
-# 
-# # Extract confidence intervals for the mean of FST
-# mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
-# 
-# # Create a data frame to store the results
-# mean_FST_df <- data.frame(
-#   pairwise_comparisons = names(mean_FST),
-#   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
-#   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
-#   upper_limit = sapply(mean_confidence_intervals, `[`, 2),
-#   p_val = p_value
-# )
-# 
-# # Remove "_2022" from population names and reorder according to the specified order
-# #mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
-# 
-# # Exclude rows with 0 in the last three columns
-# mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
-# 
-# #exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
-# mean_FST_df_filtered<- mean_FST_df_filtered %>%
-#   distinct(mean_FST, .keep_all = TRUE)
-# 
-# # Reorder pairwise_comparisons based on mean_FST
-# mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
-#                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
-# 
-# # Add a column indicating significance
-# mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
-# 
-# # Plot with significance indication
-# fst_regions <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
-#   geom_boxplot() +
-#   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
-#   scale_color_manual(values = c("red")) +  # Set colors for significance levels
-#   labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-#   theme_minimal() +
-#   coord_flip()
-# 
-# fst_regions
-# 
-# ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
+### 2) FOR PROVINCES
 
-# Create heatmap for regions comparisons
-create_heatmap <- function(data, title) {
-  
-  data$mean_FST<- round(data$mean_FST, 3)
-  data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
-  data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
-  
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
-    geom_tile() +
-    geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
-    theme_minimal() +
-    labs(x = "", y = "")
-}
-
-# Split pairwise_comparisons into pop1 and pop2
-library(tidyr)
-mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
-
-# Reorder pop1 and pop2 columns based on regions order
-regions <- c("North", "Centre", "South") #ordered from north to south
-regions <- rev(regions)
-
-mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = regions)
-mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = regions)
-
-heatmap_2022_regions <- create_heatmap(mean_FST_df)
-
-heatmap_2022_regions
-
-ggsave("fst_heatmap_regions.png", heatmap_2022_regions, width = 8, height = 6, bg = "white")
-
-
-
-#2) FOR PROVINCES
 fts_input_provinces <- merge(processed_He_results_provinces[c("locus", "post_stat_mean", "pop")], sample_size_provinces[c("unique_NIDA2_count", "pop")], by = c("pop"))
 
 # Generate all possible combinations of unique values
@@ -1917,8 +1818,28 @@ dim(cis)
 
 #merge estimates with CIs
 final_table<- merge(cis, summary_table, by = c("comparison"))
-
 final_table$comparison <- gsub("comparison", "", final_table$comparison)
+final_table <- unique(merge(final_table, FST_LLM[c("pop1", "pop2", "comparison")], by = c("comparison")))
+
+#heatmap
+final_table$He_estimate<- round(final_table$est., 3)
+final_table <- complete(final_table, pop1, pop2, fill = list(He_estimate = 0, `p-value` = 1))
+final_table$He_estimate<- ifelse(final_table$He_estimate < 0, 0, final_table$He_estimate) #TURN NEGATIVE VALUES TO 0
+final_table$label <- ifelse(final_table$`p-value` < 0.05 & final_table$He_estimate > 0 , paste0(final_table$He_estimate, "*"), as.character(final_table$He_estimate))
+
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- rev(provinces)
+
+
+final_table$pop1 <- factor(final_table$pop1, levels = provinces)
+final_table$pop2 <- factor(final_table$pop2, levels = provinces)
+
+ggplot(final_table, aes(x = pop2, y = pop1, fill = He_estimate, label = label)) +
+  geom_tile() +
+  geom_text(color = "black") +
+  scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(final_table$He_estimate), max(final_table$He_estimate))) +  # Adjust scale limits
+  theme_minimal() +
+  labs(x = "", y = "")
 
 #significance
 final_table$significance <- ifelse(final_table$`p-value` < 0.05, "p < 0.05", "not_signiff.")
@@ -1938,14 +1859,14 @@ final_table <- final_table[keep_rows, ]
 final_table <- final_table %>%
   mutate(comparison = factor(comparison, levels = comparison[order(est.)]))
 
-ggplot(final_table, aes(x = comparison, y = est., color = significance)) +
+ggplot(na.omit(final_table), aes(x = comparison, y = est., color = significance)) +
   # Add the center point
   geom_point() +
   # Add the error bars for confidence intervals
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   # Adjust the appearance
   labs(title = "",
-       x = "",
+       x = "Pairwise comparisons",
        y = "Fst Estimate") +
   scale_color_manual(values = c("black", "red")) +
   theme_minimal()+
@@ -1953,6 +1874,145 @@ ggplot(final_table, aes(x = comparison, y = est., color = significance)) +
 
 anovap <- anova(fst.model.region, type = "marginal")
 aicval <- AIC(logLik(fst.model.region))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# #bootstraping analysis (interchangeable with llm) USING THIS
+# library(boot)
+# library(boot.pval)
+# 
+# # Create a list to store bootstrap results
+# bootstrap_results <- list()
+# 
+# # Loop through each pairwise comparison
+# for (i in 1:nrow(combinations)) {
+#   pop1 <- as.character(combinations$pop1[i])
+#   pop2 <- as.character(combinations$pop2[i])
+#   
+#   # Subset data for the current pairwise comparison
+#   pairwise_data <- fst_results_df[fst_results_df$pop1 == pop1 & fst_results_df$pop2 == pop2, ]
+#   
+#   # Define a unique name for the pairwise comparison
+#   comparison_name <- paste(pop1, pop2, sep = "_vs_")
+#   
+#   # Perform bootstrap resampling
+#   bootstrap_results[[comparison_name]] <- boot(pairwise_data, calculate_FST, R = 10000)
+# }
+# 
+# 
+# # Calculate the mean of bootstrap replicates for each pairwise comparison
+# mean_FST <- sapply(bootstrap_results, function(result) mean(result$t0))
+# 
+# p_value <- data.frame()
+# 
+# for (i in seq(1:length(bootstrap_results))){
+#   p <- boot.pval(bootstrap_results[[i]], type = "perc", theta_null = 0)
+#   p_value <- rbind(p_value, p)
+# }
+# 
+# colnames(p_value)<- "p_value"
+# 
+# # Create a function to extract confidence intervals for the mean
+# get_mean_confidence_intervals <- function(bootstrap_result) {
+#   ci <- boot.ci(bootstrap_result, type = "perc")
+#   lower_limit <- ci$percent[4]
+#   upper_limit <- ci$percent[5]
+#   return(c(lower_limit, upper_limit))
+# }
+# 
+# # Extract confidence intervals for the mean of FST
+# mean_confidence_intervals <- lapply(bootstrap_results, get_mean_confidence_intervals)
+# 
+# # Create a data frame to store the results
+# mean_FST_df <- data.frame(
+#   pairwise_comparisons = names(mean_FST),
+#   mean_FST = ifelse(is.na(mean_FST), 0, mean_FST),
+#   lower_limit = sapply(mean_confidence_intervals, `[`, 1),
+#   upper_limit = sapply(mean_confidence_intervals, `[`, 2),
+#   p_val = p_value
+# )
+# 
+# # Remove "_2022" from population names and reorder according to the specified order
+# #mean_FST_df$pairwise_comparisons <- gsub("_2022", "", mean_FST_df$pairwise_comparisons)
+# 
+# # Exclude rows with 0 in the last three columns
+# mean_FST_df_filtered <- subset(mean_FST_df, lower_limit != 0 | upper_limit != 0 | mean_FST != 0)
+# 
+# #exclude repeated comparisons: CAREFUL!! IF MEANS FOR DIFFERENT COMPARISONS ARE THE SAME IT WILL ELIMINATE ONE. not the best method.
+# mean_FST_df_filtered<- mean_FST_df_filtered %>%
+#   distinct(mean_FST, .keep_all = TRUE)
+# 
+# # Reorder pairwise_comparisons based on mean_FST
+# mean_FST_df_filtered$pairwise_comparisons <- factor(mean_FST_df_filtered$pairwise_comparisons, 
+#                                                     levels = mean_FST_df_filtered$pairwise_comparisons[order(mean_FST_df_filtered$mean_FST)])
+# 
+# # Add a column indicating significance
+# mean_FST_df_filtered$significance <- ifelse(mean_FST_df_filtered$p_value < 0.05, "p < 0.05", "not_signiff.")
+# 
+# # Plot with significance indication
+# fst_regions <- ggplot(mean_FST_df_filtered, aes(x = pairwise_comparisons, y = mean_FST, color = significance)) +
+#   geom_boxplot() +
+#   geom_errorbar(aes(ymin = lower_limit, ymax = upper_limit), width = 0.2) +
+#   scale_color_manual(values = c("red")) +  # Set colors for significance levels
+#   labs(x = "Pairwise Comparisons", y = "Genome-wide Fst") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   theme_minimal() +
+#   coord_flip()
+# 
+# fst_regions
+# 
+# ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
+
+# # Create heatmap for regions comparisons
+# create_heatmap <- function(data, title) {
+#   
+#   data$mean_FST<- round(data$mean_FST, 3)
+#   data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
+#   data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
+#   
+#   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
+#     geom_tile() +
+#     geom_text(color = "black") +
+#     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
+#     theme_minimal() +
+#     labs(x = "", y = "")
+# }
+# 
+# # Split pairwise_comparisons into pop1 and pop2
+# library(tidyr)
+# mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
+# 
+# # Reorder pop1 and pop2 columns based on regions order
+# regions <- c("North", "Centre", "South") #ordered from north to south
+# regions <- rev(regions)
+# 
+# mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = regions)
+# mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = regions)
+# 
+# heatmap_2022_regions <- create_heatmap(mean_FST_df)
+# 
+# heatmap_2022_regions
+# 
+# ggsave("fst_heatmap_regions.png", heatmap_2022_regions, width = 8, height = 6, bg = "white")
+
 
 
 
@@ -2041,36 +2101,36 @@ aicval <- AIC(logLik(fst.model.region))
 # 
 # ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 10, bg = "white")
 
-# Create heatmap for regions comparisons
-create_heatmap <- function(data, title) {
-  
-  data$mean_FST<- round(data$mean_FST, 3)
-  data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
-  data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
-  
-  ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
-    geom_tile() +
-    geom_text(color = "black") +
-    scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
-    theme_minimal() +
-    labs(x = "", y = "")
-}
-
-# Split pairwise_comparisons into pop1 and pop2
-library(tidyr)
-mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
-
-# Reorder pop1 and pop2 columns based on provinces order
-provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
-provinces <- rev(provinces)
-
-mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = provinces)
-mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = provinces)
-
-heatmap_2022_provinces <- create_heatmap(mean_FST_df)
-heatmap_2022_provinces
-
-ggsave("heatmap_fst_provinces.png", heatmap_2022_provinces, width = 12, height = 10, bg = "white")
+# # Create heatmap for regions comparisons
+# create_heatmap <- function(data, title) {
+#   
+#   data$mean_FST<- round(data$mean_FST, 3)
+#   data$mean_FST<- ifelse(data$mean_FST < 0, 0, data$mean_FST) #TURN NEGATIVE VALUES TO 0
+#   data$label <- ifelse(data$p_val < 0.05 & data$mean_FST > 0 , paste0(data$mean_FST, "*"), as.character(data$mean_FST))
+#   
+#   ggplot(data, aes(x = pop2, y = pop1, fill = mean_FST, label = label)) +
+#     geom_tile() +
+#     geom_text(color = "black") +
+#     scale_fill_gradient(low = "lightblue1", high = "orange", limits = c(min(data$mean_FST), max(data$mean_FST))) +  # Adjust scale limits
+#     theme_minimal() +
+#     labs(x = "", y = "")
+# }
+# 
+# # Split pairwise_comparisons into pop1 and pop2
+# library(tidyr)
+# mean_FST_df <- separate(mean_FST_df, pairwise_comparisons, into = c("pop1", "pop2"), sep = "_vs_")
+# 
+# # Reorder pop1 and pop2 columns based on provinces order
+# provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+# provinces <- rev(provinces)
+# 
+# mean_FST_df$pop1 <- factor(mean_FST_df$pop1, levels = provinces)
+# mean_FST_df$pop2 <- factor(mean_FST_df$pop2, levels = provinces)
+# 
+# heatmap_2022_provinces <- create_heatmap(mean_FST_df)
+# heatmap_2022_provinces
+# 
+# ggsave("heatmap_fst_provinces.png", heatmap_2022_provinces, width = 12, height = 10, bg = "white")
 
 
 ########################
