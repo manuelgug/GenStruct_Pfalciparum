@@ -749,7 +749,7 @@ b1 <- ggplot(coi_results_region, aes(x = region, y = naive_coi, fill = region)) 
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "Naive COI") +
-  guides(color = FALSE) +
+  guides(color = FALSE, fill = FALSE) +
   stat_compare_means(comparisons = pairwise_region_combinations, aes(label = after_stat(p.signif)),
                      method = "wilcox.test")
 
@@ -1456,6 +1456,8 @@ population_levels <- provinces
 results_list_provinces <- lapply(provinces, fit_and_collect_results, pop = "province")
 results_provinces <- analyze_results(results_list_provinces, pop = "province")
 
+ggsave("province_He_lmm.png", results_provinces[[1]], width = 6, height = 6, bg = "white")
+
 #PREGIONS
 population_levels <- regions
 results_list_regions <- lapply(regions, fit_and_collect_results, pop = "region")
@@ -1682,6 +1684,8 @@ cis$comparison <-  rownames(cis)
 
 dim(cis)
 
+library(tidyr
+        )
 #merge estimates with CIs
 final_table<- merge(cis, summary_table, by = c("comparison"))
 final_table$comparison <- gsub("comparison", "", final_table$comparison)
@@ -2358,7 +2362,7 @@ variance_explained_axis2 <- variance_explained$Eigenvalues[2]
 # Plot PCoA with variance explained in title
 af_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_436_581)) +
   geom_point(size = 4, alpha = 0.7) +
-  labs(title = "In-Sample Allele Frequecnies",
+  labs(title = "",
        x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
        y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
   theme_minimal()+
@@ -2391,7 +2395,7 @@ variance_explained_axis2 <- variance_explained$Eigenvalues[2]
 # Plot PCoA with variance explained in title
 pa_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_436_581)) +
   geom_point(size = 4, alpha = 0.7) +
-  labs(title = "In-Sample Allele Presence/Absence",
+  labs(title = "",
        x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
        y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
   theme_minimal()
