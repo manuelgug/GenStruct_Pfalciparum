@@ -1440,12 +1440,15 @@ analyze_results <- function(results_list, pop = "region") {
   anovap <- anova(he.model.province, type = "marginal")
   aicval <- AIC(logLik(he.model.province))
   
+  kw <- kruskal.test(post_stat_med ~ population, data = he.model.province$data)
+  
   
   # Combine results
   results <- list(plotCI = plotci,
                   llm_tables_significant_pariwise = llm_tables_significant_pariwise,
                   anovap = anovap,
-                  AIC = aicval)
+                  AIC = aicval,
+                  KW = kw)
  
   return(results)
 }
@@ -1746,8 +1749,7 @@ fst_regions <- ggplot(na.omit(final_table), aes(x = comparison, y = est., color 
 fst_regions
 
 anovap <- anova(fst.model.region, type = "marginal")
-aicval <- AIC(logLik(fst.model.region))
-
+kw <- kruskal.test(fst ~ comparison, data = fst.model.region$data)
 ggsave("fst_heatmap_regions.png", heatmap_regions, width = 8, height = 6, bg = "white")
 ggsave("fst_CI_regions.png", fst_regions, width = 8, height = 6, bg = "white")
 
@@ -1924,6 +1926,7 @@ fst_provinces <- ggplot(na.omit(final_table), aes(x = comparison, y = est., colo
 fst_provinces
 
 anovap <- anova(fst.model.region, type = "marginal")
+kw <- kruskal.test(fst ~ comparison, data = fst.model.region$data)
 aicval <- AIC(logLik(fst.model.region))
 
 ggsave("fst_heatmap_provinces.png", heatmap_provinces, width = 12, height = 10, bg = "white")
