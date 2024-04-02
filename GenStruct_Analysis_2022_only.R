@@ -2435,6 +2435,194 @@ combined_plot_pcoa <- plot_grid(af_pcoa, pa_pcoa, ncol = 2)
 ggsave("PCoA_regions.png", combined_plot_pcoa, width = 16, height = 10, bg = "white")
 
 
+
+# pcoa separated by mutations
+
+#format 436 mutation labels
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "dhps_436_mut/mix", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436 == "dhps_436-WT_581-mix", "WT", pcs_with_labels$VOC_436)
+
+#format 581 mutations labels
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "WT", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_581 == "dhps_436-WT_581-mix", "dhps_581_mix", pcs_with_labels$VOC_581)
+
+
+#PCoA 436
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC_436_581 = pca_labels$VOC_436_581)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+#format 436 mutation labels
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "dhps_436_mut/mix", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436 == "dhps_436-WT_581-mix", "WT", pcs_with_labels$VOC_436)
+
+# Plot PCoA with variance explained in title
+af_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_436)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(title = "",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()+
+  guides(fill = FALSE, color = FALSE, shape = FALSE)+
+  scale_color_manual(values = province_colors)+
+  scale_shape_manual(values = c(7, 0, 19))
+
+af_pcoa
+
+#PCoA presence/absence
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged_pres_abs, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC_436_581 = pca_labels$VOC_436_581)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+#format 436 mutation labels
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "dhps_436_mut/mix", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_436 <- ifelse(pcs_with_labels$VOC_436 == "dhps_436-WT_581-mix", "WT", pcs_with_labels$VOC_436)
+
+# Plot PCoA with variance explained in title
+pa_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_436)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(title = "",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()+
+  scale_color_manual(values = province_colors)+
+  scale_shape_manual(values = c(7, 0, 19))
+
+pa_pcoa
+
+combined_plot_pcoa <- plot_grid(af_pcoa, pa_pcoa, ncol = 2)
+
+ggsave("PCoA_regions_436.png", combined_plot_pcoa, width = 16, height = 10, bg = "white")
+
+
+
+#PCoA 581
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC_436_581 = pca_labels$VOC_436_581)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+#format 581 mutations labels
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "WT", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_581 == "dhps_436-WT_581-mix", "dhps_581_mix", pcs_with_labels$VOC_581)
+
+# Plot PCoA with variance explained in title
+af_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_581)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(title = "",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()+
+  guides(fill = FALSE, color = FALSE, shape = FALSE)+
+  scale_color_manual(values = province_colors)+
+  scale_shape_manual(values = c(7, 0, 19))
+
+af_pcoa
+
+#PCoA presence/absence
+
+# Compute Bray-Curtis dissimilarity matrix
+bray_curtis_dist <- vegdist(rearranged_pres_abs, method = "bray")
+
+# Perform PCoA
+pcoa_result <- pcoa(bray_curtis_dist)
+
+# Extract the principal coordinate scores
+pcs <- as.data.frame(pcoa_result$vectors)
+
+# Combine principal coordinate scores with region labels
+pcs_with_labels <- cbind(pcs, province = pca_labels$province, region = pca_labels$region, VOC_436_581 = pca_labels$VOC_436_581)
+
+pcs_with_labels$province <- factor(pcs_with_labels$province, levels = provinces)
+pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
+
+# # Plot PCoA
+variance_explained <- round(pcoa_result$values / sum(pcoa_result$values) * 100, 2)
+variance_explained_axis1 <- variance_explained$Eigenvalues[1]
+variance_explained_axis2 <- variance_explained$Eigenvalues[2]
+
+#format 581 mutations labels
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_436_581 == "dhps_436-mix_581-WT" | pcs_with_labels$VOC_436_581 == "dhps_436-mut_581-WT", 
+                                  "WT", pcs_with_labels$VOC_436_581)
+
+pcs_with_labels$VOC_581 <- ifelse(pcs_with_labels$VOC_581 == "dhps_436-WT_581-mix", "dhps_581_mix", pcs_with_labels$VOC_581)
+
+# Plot PCoA with variance explained in title
+pa_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province, shape = VOC_581)) +
+  geom_point(size = 4, alpha = 0.5) +
+  labs(title = "",
+       x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
+       y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
+  theme_minimal()+
+  scale_color_manual(values = province_colors)+
+  scale_shape_manual(values = c(7, 0, 19))
+
+pa_pcoa
+
+combined_plot_pcoa <- plot_grid(af_pcoa, pa_pcoa, ncol = 2)
+
+ggsave("PCoA_regions_581.png", combined_plot_pcoa, width = 16, height = 10, bg = "white")
+
+
+
 #####TSNE
 set.seed(69)
 perplexity <- floor((nrow(rearranged_filtered) - 1) / 3) #highest possible, if needed
