@@ -625,6 +625,7 @@ coi_results$polyclonal_from_ecoi_med <- ifelse(coi_results$post_effective_coi_me
 colnames(coi_results)[1] <- "NIDA2"
 coi_results <- merge(coi_results, db[c("NIDA2", "province", "region", "seasonality")], by="NIDA2")
 
+coi_results$province <- gsub(" ", "_", coi_results$province) # for cabo delgado
 
 # MANAGE SEASONALITY
 seasonality_factor <- as_factor(coi_results$seasonality)
@@ -655,7 +656,7 @@ polyclonal_percentage_province <- coi_results %>%
   ungroup()
 
 
-provinces <- c("Niassa", "Cabo Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
+provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
 coi_results$province <- factor(coi_results$province, levels = provinces)
@@ -664,14 +665,17 @@ coi_results_region$region <- factor(coi_results_region$region, levels = regions)
 polyclonal_percentage_region$region <- factor(polyclonal_percentage_region$region, levels = regions)
 polyclonal_percentage_province$province <- factor(polyclonal_percentage_province$province, levels = provinces)
 
+province_colors <- c(Niassa = "firebrick4", Cabo_Delgado = "red", Nampula = "indianred1", Zambezia = "darkgreen", Tete = "forestgreen", Manica_Dry = "limegreen", Manica_Rainy = "springgreen2", Sofala  = "chartreuse", Inhambane = "cornflowerblue", Maputo_Dry = "deepskyblue", Maputo_Rainy = "turquoise")
 
-a <- ggplot(coi_results, aes(x = naive_coi, fill = region)) +
+
+a <- ggplot(coi_results, aes(x = naive_coi, fill = province)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_wrap(~ province , scales = "fixed", nrow = 1) + 
   labs(title = "",
        x = "Naive COI",
        y = "Frequency",
        fill = "Province") +
+  scale_fill_manual(values = province_colors)+
   theme_minimal()
 
 a
@@ -692,7 +696,7 @@ pairwise_province_combinations <- lapply(1:nrow(signif_p.pairwise_province_naive
     signif_p.pairwise_province_naive_coi[i, "Var2"]))
 })
 
-a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = region)) +
+a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = province)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -702,7 +706,8 @@ a1 <- ggplot(coi_results, aes(x = province, y = naive_coi, fill = region)) +
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "Naive COI") +
-  guides(color = FALSE)+
+  guides(color = FALSE, fill=FALSE)+
+  scale_fill_manual(values = province_colors)+
   stat_compare_means(comparisons = pairwise_province_combinations, aes(label = after_stat(p.signif)),
                      method = "wilcox.test")
 
@@ -758,7 +763,7 @@ b1
 ggsave("naive_coi_regions_violin.png", b1, width = 8, height = 6, bg = "white")
 
 
-c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = region)) +
+c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = province)) +
   geom_histogram(binwidth = 1, position = "identity", alpha = 0.7) +
   facet_wrap(~ province , scales = "fixed", nrow = 1) + 
   labs(title = "",
@@ -766,6 +771,7 @@ c <- ggplot(coi_results, aes(x = post_effective_coi_med, fill = region)) +
        y = "Frequency",
        fill = "Province") +
   theme_minimal() +
+  scale_fill_manual(values = province_colors)+
   guides(fill = FALSE) 
 
 c
@@ -785,7 +791,7 @@ pairwise_province_combinations <- lapply(1:nrow(signif_p.pairwise_province_ecoi)
                  signif_p.pairwise_province_ecoi[i, "Var2"]))
 })
 
-c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = region)) +
+c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = province)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -795,7 +801,8 @@ c1 <- ggplot(coi_results, aes(x = province, y = post_effective_coi_med, fill = r
   ) +
   scale_fill_discrete(name = "Region") +
   labs(x = "", y = "eCOI") +
-  guides(color = FALSE) +
+  guides(color = FALSE, fill = FALSE) +
+  scale_fill_manual(values = province_colors)+
   stat_compare_means(comparisons = pairwise_province_combinations, aes(label = after_stat(p.signif)),
                      method = "wilcox.test")
 
@@ -868,13 +875,15 @@ ggsave("perc_polyclonal_regions.png", e, width = 6, height = 4, bg = "white")
 
 polyclonal_percentage_province <- merge(polyclonal_percentage_province, unique(coi_results[c("province", "region")]), by="province")
 
-f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = region))+
-  geom_bar(stat = "identity", position = "dodge") +
+f <- ggplot(polyclonal_percentage_province, aes(x = province, y = polyclonal_percentage_province,  fill = province))+
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
   labs(x = "", y = "%Polyclonal Infections") +
   #facet_wrap(~province, scales = "fixed", nrow = 1) +
   #scale_fill_manual(values = c("2022" = "orange")) + 
   theme_minimal()+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  scale_fill_manual(values = province_colors)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  guides(fill = FALSE) 
 f
 
 ggsave("perc_polyclonal_provinces.png", f, width = 8, height = 6, bg = "white")
@@ -1093,6 +1102,8 @@ mean_Fws_per_individual<- heterozygosity_data_filtered %>%
   summarize(mean_indiv_fws_province = mean(fws_province),
             mean_indiv_fws_region = mean(fws_region))
 
+write.csv(mean_Fws_per_individual, "mean_Fws_per_individual.csv", row.names = F)
+
 
 provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Dry", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Dry", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
@@ -1113,7 +1124,10 @@ combos_pairwise_province_fws_province <- lapply(1:nrow(signif_p.pairwise_provinc
                  signif_p.pairwise_province_fws[i, "Var2"]))
 })
 
-prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = region)) +
+province_colors <- c(Niassa = "firebrick4", Cabo_Delgado = "red", Nampula = "indianred1", Zambezia = "darkgreen", Tete = "forestgreen", Manica_Dry = "limegreen", Manica_Rainy = "springgreen2", Sofala  = "chartreuse", Inhambane = "cornflowerblue", Maputo_Dry = "deepskyblue", Maputo_Rainy = "turquoise")
+
+
+prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws_province, fill = province)) +
   geom_violin(width = 1, aes(color = region), alpha = 0.4) +
   geom_boxplot(width = 0.1, aes(color = region), fill = "white", alpha = 0.4) +
   theme_minimal() +
@@ -1124,7 +1138,8 @@ prov_fws <- ggplot(mean_Fws_per_individual, aes(x = province, y = mean_indiv_fws
   scale_fill_discrete(name = "Region") +  # Customize legend title
   #ggtitle("Province Connectivity") +
   labs(x = "Province", y = "Genome-wide 1-Fws") +
-  guides(color = FALSE) +
+  guides(color = FALSE, fill = FALSE) +
+  scale_fill_manual(values = province_colors)+
   stat_compare_means(comparisons = combos_pairwise_province_fws_province, aes(label = after_stat(p.signif)),
                      method = "wilcox.test")
 
@@ -1687,8 +1702,8 @@ cis$comparison <-  rownames(cis)
 
 dim(cis)
 
-library(tidyr
-        )
+library(tidyr)
+
 #merge estimates with CIs
 final_table<- merge(cis, summary_table, by = c("comparison"))
 final_table$comparison <- gsub("comparison", "", final_table$comparison)
@@ -2280,6 +2295,9 @@ rearranged_pres_abs <- rearranged_pres_abs %>%
 provinces <- c("Niassa", "Cabo_Delgado", "Nampula", "Zambezia", "Tete", "Manica_Rainy", "Sofala", "Inhambane", "Maputo_Rainy") #ordered from north to south
 regions <- c("North", "Centre", "South")
 
+province_colors <- c(Niassa = "firebrick4", Cabo_Delgado = "red", Nampula = "indianred1", Zambezia = "darkgreen", Tete = "forestgreen", Manica_Dry = "limegreen", Manica_Rainy = "springgreen2", Sofala  = "chartreuse", Inhambane = "cornflowerblue", Maputo_Dry = "deepskyblue", Maputo_Rainy = "turquoise")
+
+
 #PCA
 pca_result <- prcomp(rearranged, scale. = F)
 
@@ -2296,12 +2314,14 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
 # Create the plot
-af_pca<- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pcs_with_labels$VOC_436_581))) +
+af_pca <- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(province), shape = factor(VOC_436_581))) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "In-sample Allele Frequencies",
        x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
        y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal() +guides(fill = FALSE, color = FALSE, shape = FALSE)
+  theme_minimal() +
+  scale_color_manual(values = province_colors) +  # Set colors based on province
+  guides(fill = FALSE, color = FALSE, shape = FALSE)
 
 af_pca
 
@@ -2323,12 +2343,14 @@ pcs_with_labels$region <- factor(pcs_with_labels$region, levels = regions)
 pc_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
 
 # Create the plot
-pa_pca<- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(pcs_with_labels$province), shape = factor(pca_labels$VOC_436_581))) +
+pa_pca<- ggplot(pcs_with_labels, aes(x = PC1, y = PC2, color = factor(province), shape = factor(VOC_436_581))) +
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "In-Sample Allele Presence/Absence",
        x = paste0("PC1: ", round(pc_variance[1], 2), "%\n"),
        y = paste0("PC2: ", round(pc_variance[2], 2), "%")) +
-  theme_minimal()
+  theme_minimal() +
+  scale_color_manual(values = province_colors) +  # Set colors based on province
+  guides(fill = FALSE, color = FALSE, shape = FALSE)
 
 pa_pca
 
@@ -2369,7 +2391,8 @@ af_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province,
        x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
        y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
   theme_minimal()+
-  guides(fill = FALSE, color = FALSE, shape = FALSE)
+  guides(fill = FALSE, color = FALSE, shape = FALSE)+
+  scale_color_manual(values = province_colors)
 
 af_pcoa
 
@@ -2401,7 +2424,8 @@ pa_pcoa <- ggplot(pcs_with_labels, aes(x = Axis.1, y = Axis.2, color = province,
   labs(title = "",
        x = paste0("PCo 1: ", variance_explained_axis1, "%\n"),
        y = paste0("PCo 2: ", variance_explained_axis2, "%")) +
-  theme_minimal()
+  theme_minimal()+
+  scale_color_manual(values = province_colors)
 
 pa_pcoa
 
@@ -2436,7 +2460,8 @@ af_tsne <- ggplot(tsne_data_freqs, aes(V1, V2, color = province, shape = VOC_436
   labs(title = "In-Sample Allele Frequencies",
        x = "t-SNE 1", y = "t-SNE 2") +
   theme_minimal()+
-  guides(fill = FALSE, color = FALSE, shape = FALSE)
+  guides(fill = FALSE, color = FALSE, shape = FALSE)+
+  scale_color_manual(values = province_colors)
 
 af_tsne
 
@@ -2445,7 +2470,8 @@ pa_tsne<- ggplot(tsne_data_pres_abs, aes(V1, V2, color = province, shape = VOC_4
   geom_point(size = 4, alpha = 0.7) +
   labs(title = "In-Sample Allele Presence/Absence",
        x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
+  theme_minimal()+
+  scale_color_manual(values = province_colors)
 
 pa_tsne
 
@@ -2545,7 +2571,8 @@ pop_allele_freq_tsne <- ggplot(tsne_data_freqs, aes(V1, V2, color = metadata_pro
   geom_point(size = 8, alpha = 0.7) +
   labs(title = "",
        x = "t-SNE 1", y = "t-SNE 2") +
-  theme_minimal()
+  theme_minimal()+
+  scale_color_manual(values = province_colors)
 
 pop_allele_freq_tsne
 
