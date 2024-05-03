@@ -657,8 +657,8 @@ for (i in seq_along(data_frames)) {
 # 7.- Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+mcmc_results <- readRDS("all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
@@ -953,12 +953,12 @@ plot(coi_for_db$naive_coi, coi_for_db$post_effective_coi_med)
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
-rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
+rds_files <- list.files(path = ".", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 
 # Load each RDS file into the list with the file name as the list name
@@ -1460,7 +1460,7 @@ results_regions <- analyze_results(results_list_regions, pop = "region")
 # 10.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
 #########################################
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
@@ -1469,8 +1469,8 @@ combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
-rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
+rds_files <- list.files(path = ".", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 
 # Load each RDS file into the list with the file name as the list name
@@ -2160,7 +2160,7 @@ ggsave("fst_CI_provinces.png", fst_provinces, width = 8, height = 6, bg = "white
 # 11. Ordination, population structure
 ########################
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 #add VOC
 combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
@@ -2639,15 +2639,15 @@ ggsave("tsne_regions.png", combined_plot_tsne, width = 16, height = 10, bg = "wh
 
 # POPULATION ALLELE FREQ TSNE
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
 #rename alleles
 combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
 
 # 1) extract allele freqs
 #import everything into lists
-rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
+rds_files <- list.files(path = ".", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "./all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 # Load each RDS file into the list with the file name as the list name
 allele_freqs_list <- list()
@@ -2817,7 +2817,7 @@ ggsave("mantel_pop_allele_Freqs.png", p, width = 8, height = 6, bg = "white")
 # 12.- IBD: Proportion of related pairwise infections using IBD between provinces and regions
 #######################################################
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
+combined_df_merged <- readRDS("combined_df_merged_2022_only.RDS")
 
 #add VOC
 combined_df_merged <- merge(combined_df_merged, db[c("NIDA2", "dhps_doub_95_b")], by = "NIDA2")
@@ -2856,7 +2856,7 @@ pardef <- par(no.readonly = TRUE)
 
 ## 2022 samples ##
 #format data
-dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "pseudo_cigar")
+dsmp <- formatDat(combined_df_merged, svar = "NIDA2", lvar = "locus", avar = "allele") #CHANGED pseudo_cigar for allele. DIFF RESULTS?
 str(dsmp, list.len = 2)
 
 # format metadata
@@ -2913,11 +2913,13 @@ dev.off()
 ### EXAMINE PAIRS OF SAMPLES!
 str(dres0_2022)
 
+n_samples <- dim(dres0_2022)[1]
+
 #extract info
-estimates_df <-as.data.frame(dres0_2022[1:924, 1:924, "estimate"])
-estimates_p <-as.data.frame(dres0_2022[1:924, 1:924, "p_value"])
-estimates_CI_lower <- as.data.frame(dres0_2022[1:924, 1:924, "CI_lower"])
-estimates_CI_upper <- as.data.frame(dres0_2022[1:924, 1:924, "CI_upper"])
+estimates_df <-as.data.frame(dres0_2022[1:n_samples, 1:n_samples, "estimate"])
+estimates_p <-as.data.frame(dres0_2022[1:n_samples, 1:n_samples, "p_value"])
+estimates_CI_lower <- as.data.frame(dres0_2022[1:n_samples, 1:n_samples, "CI_lower"])
+estimates_CI_upper <- as.data.frame(dres0_2022[1:n_samples, 1:n_samples, "CI_upper"])
 
 library(reshape2)
 #sort info into a single df
@@ -2937,7 +2939,7 @@ merged_df <- merge(merged_df, estimates_CI_upper_long, by = c("sample1", "sample
 
 
 
-#saveRDS(merged_df, "dres0_2022_TABLE.RDS")
+# saveRDS(merged_df, "dres0_2022_TABLE.RDS")
 merged_df <- readRDS("dres0_2022_TABLE.RDS")
 
 #remove NA rows
