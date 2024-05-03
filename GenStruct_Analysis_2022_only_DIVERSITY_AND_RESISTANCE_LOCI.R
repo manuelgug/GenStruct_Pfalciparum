@@ -109,6 +109,7 @@ length(unique(repeated_nidas_df$NIDA2))
 #ask team about these nidas
 write.csv(repeated_nidas_df, "repeated_nidas.csv", row.names = F)
 
+
 #######################################################
 # 2.- genomic data from all runs (allele data, resmarkers, haplos?)
 #######################################################
@@ -137,7 +138,7 @@ for (i in seq_along(microhaps_list)) {
   colnames(df)[1] <- "SampleID"
   
   df <- df %>% ### TEHERE IS A BUG WITH THE MASK THAT GENERATES MORE ALLELES THAN THERE REALLY ARE. THIS SNIPPET OF CODE COLLAPSES REPETITIONSAND SUMS THE READS AND FREQS. CRITICAL!!!
-    group_by(SampleID, GeneID, MicrohapIndex, Microhaplotype) %>%
+    group_by(SampleID, GeneID, Gene, MicrohapIndex, Microhaplotype) %>%
     summarize(reads = sum(Reads),
               norm.reads.locus = sum(norm.reads.locus)) %>%
     mutate(allele = paste(MicrohapIndex, ".", row_number(), sep = ""))
@@ -250,14 +251,112 @@ combined_df_merged_microhaps <- merge(combined_df_microhaps, db[c("NIDA2", "year
 
 saveRDS(combined_df_merged_microhaps, "microhap_data_list.RDS")
 
-A<- readRDS("microhap_data_list.RDS")
+
+
+#######################################################
+# 3.- GENOMIC + DB MERGING, FILTERING ETC. (DATA PREP)
+#######################################################
+
+allele_data_list <- readRDS("microhap_data_list.RDS")
+
+# concat all dataframes together
+combined_df <- bind_rows(allele_data_list)
+
+# calculate n.alleles for each locus of each sample if not done already during contaminant filtering
+if (!("n.alleles" %in% colnames(combined_df))){
+  combined_df <- combined_df %>%
+    group_by(sample_id, paste0(Gene, "_", MicrohapIndex)) %>%
+    mutate(n.alleles = n_distinct(alleles))
+}
+
+
+if( sum(!(combined_df$NIDA2 %in% db$NIDA2)) == 0){
+  print("All nidas in combined_merged_df are also the metadata db. No weird samples ✔")
+}else{
+  print("grab another coffee.")
+}
+
+
+combined_df_merged <- combined_df
+
+
+## FURTHER FILTERING
+# 1) MAF filering (< 0.01)
+combined_df_merged <- combined_df_merged[combined_df_merged$norm.reads.locus  > 0.01, ]
+
+# 3) remove bad diversity loci: those that are not in at least 100 samples with a read depth of 100. 
+# Group by NIDA2 and locus, then summarize the total reads
+locus_read_depth <- combined_df_merged %>%
+  group_by(NIDA2, locus = paste0(MicrohapIndex)) %>%
+  summarize(read_depth = sum(reads))
+
+# KEEP LOCI found in samples >=100 with read depth greater than 100
+locus_counts <- locus_read_depth %>%
+  group_by(locus) %>%
+  summarize(samples_above_100 = sum(read_depth >= 100))
+
+locus_counts <- na.omit(locus_counts)
+
+loci_to_keep <- locus_counts[locus_counts$samples_above_100 >= 100,]$locus
+
+combined_df_merged <- combined_df_merged[combined_df_merged$MicrohapIndex %in% loci_to_keep, ]
+
+library(forcats)
+
+# MANAGE SEASONALITY
+seasonality_factor <- as_factor(combined_df_merged$seasonality)
+seasonality_recode <- recode(seasonality_factor, "1" = "Rainy", "2" = "Dry")
+seasonality_char <- as.character(seasonality_recode)
+combined_df_merged$seasonality <- seasonality_char
+
+combined_df_merged$province <- ifelse(
+  is.na(combined_df_merged$seasonality),
+  combined_df_merged$province,
+  paste0(combined_df_merged$province, "_", combined_df_merged$seasonality)
+)
+
+# # JUST IN CASE... recalculate n.alleles for each locus of each sample
+# combined_df_merged <- combined_df_merged %>%
+#     group_by(NIDA2, locus) %>%
+#     mutate(n.alleles = n_distinct(pseudo_cigar))
+
+#recount n.alleles after filtering
+combined_df_merged <- combined_df_merged %>%
+  group_by(NIDA2, MicrohapIndex) %>%
+  mutate(n.alleles = n_distinct(allele))
+
+combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
+
+combined_df_merged <- as.data.frame(combined_df_merged)
+
+
+# FILTERING RESULTS
+SS <- length(unique(combined_df_merged$NIDA2))
+cat("Final sample size is", as.character(SS), " although some will be filtered out depending on the diversity results!!")
+
+LC <- length(unique(combined_df_merged$MicrohapIndex))
+cat("Final Diversity loci count is", as.character(LC))
+
+#save allele_data_list
+saveRDS(combined_df_merged, "combined_df_merged_microhaps.RDS")
+
+
+
 
 #######################################################
 # Merge allele data and microhap data into a single df
 #######################################################
 
+combined_df_merged_microhaps <- readRDS("combined_df_merged_microhaps.RDS")
+combined_df_merged <- readRDS("../combined_df_merged_2022_only.RDS")
+
+#rename microhap loci
+combined_df_merged_microhaps$MicrohapIndex <- paste0(combined_df_merged_microhaps$Gene, "__", combined_df_merged_microhaps$MicrohapIndex)
+#rename microhap alleles
+combined_df_merged_microhaps$Microhaplotype <- paste0(combined_df_merged_microhaps$MicrohapIndex, "__", combined_df_merged_microhaps$Microhaplotype)
+
 combined_df_merged_microhaps_SUBSET <- combined_df_merged_microhaps[c("NIDA2", "MicrohapIndex", "Microhaplotype", "reads", "province", "region", "run_id")]
-combined_df_merged_SUBSET <- combined_df_merged[c("SampleID", "locus", "allele", "reads", "province", "region", "run_id")]
+combined_df_merged_SUBSET <- combined_df_merged[c("NIDA2", "locus", "allele", "reads", "province", "region", "run_id")]
 
 #rename columns
 colnames(combined_df_merged_microhaps_SUBSET) <- c("sample_id", "locus", "allele", "reads", "province", "region", "run_id")
@@ -308,6 +407,11 @@ sample_size_regions
 sum(sample_size_regions$unique_NIDA2_count)
 
 
+# # Replace contents of allele column based on condition
+# FINAL_MERGED_DIVERSITY_RESISTANCE_DF <- FINAL_MERGED_DIVERSITY_RESISTANCE_DF %>%
+#   mutate(allele = ifelse(grepl("^\\d", locus), paste0(locus, "___", allele), allele))
+
+
 saveRDS(FINAL_MERGED_DIVERSITY_RESISTANCE_DF, "FINAL_MERGED_DIVERSITY_RESISTANCE_DF.RDS")
 
 
@@ -329,7 +433,7 @@ mcmc_results <- moire::run_mcmc(
   dat_filter, is_missing = dat_filter$is_missing,
   verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
   pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-  thin = 10); saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
+  thin = 10); saveRDS(mcmc_results, "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI_DIV_RES.RDS")
 
 
 
@@ -378,7 +482,7 @@ for (i in seq_along(data_frames)) {
     it_pr <-  paste0(province, "_RES_DIV_", year)
     print(it_pr)
     
-    run_moire(province_df, province)
+    run_moire(province_df, it_pr)
   }
 }
 
@@ -390,42 +494,25 @@ for (i in seq_along(data_frames)) {
   df <- data_frames[[i]]
   
   for (region in unique(df$region)) {
-    province_df <- df[df$region == region, ]
+    region_df <- df[df$region == region, ]
     
     # Run MOIRE
-    it_pr <-  paste0(province, "_RES_DIV_", year)
-    print(it_pr)
+    it_re <-  paste0(region, "_RES_DIV_", year)
+    print(it_re)
     
-    run_moire(province_df, it_re)
+    run_moire(region_df, it_re)
   }
 }
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 #######################################################
-# 7.- Present MOI/eMOI results overall and means per province and region for each year
+# Present MOI/eMOI results overall and means per province and region for each year
 #######################################################
 
-mcmc_results <- readRDS("FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS")
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
+mcmc_results <- readRDS("all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI_DIV_RES.RDS")
+combined_df_merged <- readRDS("FINAL_MERGED_DIVERSITY_RESISTANCE_DF.RDS")
 
 eff_coi <- moire::summarize_effective_coi(mcmc_results)
 naive_coi <- moire::summarize_coi(mcmc_results)
@@ -713,75 +800,7 @@ write.csv(coi_for_db, "coi_for_db.csv", row.names = F)
 plot(coi_for_db$naive_coi, coi_for_db$post_effective_coi_med)
 ###
 
-#######################################################
-# 8.- calculate He for each population (per region/province)
-#######################################################
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
-# RUN IN CLUSTER:
-# Define function to run MOIRE and save results
-run_moire <- function(df, output_name) {
-  colnames(df)[1] <- "sample_id"
-  
-  # set MOIRE parameters
-  dat_filter <- moire::load_long_form_data(df)
-  burnin <- 1e4
-  num_samples <- 1e4
-  pt_chains <- seq(1, .5, length.out = 20)
-  
-  # run moire
-  mcmc_results <- moire::run_mcmc(
-    dat_filter, is_missing = dat_filter$is_missing,
-    verbose = TRUE, burnin = burnin, samples_per_chain = num_samples,
-    pt_chains = pt_chains, pt_num_threads = length(pt_chains),
-    thin = 10
-  )
-  
-  # checkpoint
-  saveRDS(mcmc_results, paste0(output_name, "_MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS"))
-}
-
-# Create a list of data frames and corresponding years
-data_frames <- list(combined_df_merged)
-years <- list("2022")
-
-# Loop over each province
-for (i in seq_along(data_frames)) {
-  year <- years[[i]]
-  df <- data_frames[[i]]
-  
-  for (province in unique(df$province)) {
-    province_df <- df[df$province == province, ]
-    
-    # Run MOIRE
-    it_pr <-  paste0(province, "_", year)
-    print(it_pr)
-    
-    run_moire(province_df, it_pr)
-  }
-}
-
-data_frames[[1]] <- data_frames[[1]][!(data_frames[[1]]$province %in% c("Maputo_Dry", "Manica_Dry")), ] # remove DRY season pops from region analysis
-
-# Loop over each region
-for (i in seq_along(data_frames)) {
-  year <- years[[i]]
-  df <- data_frames[[i]]
-  
-  for (region in unique(df$region)) {
-    province_df <- df[df$region == region, ]
-    
-    # Run MOIRE
-    it_re <-  paste0(region, "_", year)
-    print(it_re)
-    
-    run_moire(province_df, it_re)
-  }
-}
 
 #######################################################
 # 9.- He and Fws results 
@@ -790,16 +809,12 @@ for (i in seq_along(data_frames)) {
 ### no need to remove DRY season pops from region analysis because it already was removed qhen running moire by population 
 
 
-combined_df_merged <- readRDS("FINAL_MOIRE_RESULTS/combined_df_merged_2022_only.RDS")
-combined_df_merged$province <- gsub(" ", "_", combined_df_merged$province) # for cabo delgado
-#rename alleles
-combined_df_merged$allele <- paste0(combined_df_merged$locus, "_", combined_df_merged$pseudo_cigar)
-
+combined_df_merged <- readRDS("FINAL_MERGED_DIVERSITY_RESISTANCE_DF.RDS")
 
 # 1) calculate heterozygosity of the population (He); pop = province, region
 #import everything into lists
-rds_files <- list.files(path = "FINAL_MOIRE_RESULTS", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
-rds_files <- rds_files[!rds_files %in% "FINAL_MOIRE_RESULTS/all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
+rds_files <- list.files(path = ".", pattern = "\\MOIRE-RESULTS_FOR_ALLELE_FREQS.RDS$", full.names = TRUE)
+rds_files <- rds_files[!rds_files %in% "all_samples_complete_filtered_MOIRE-RESULTS_2022_only_FOR_MOI.RDS"] 
 
 
 # Load each RDS file into the list with the file name as the list name
@@ -825,23 +840,23 @@ for (i in seq_along(He_results_list)) {
 }
 
 #formatting categories
-processed_He_results$population <- gsub("_2022_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_He_results$population)
+processed_He_results$population <- gsub("_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_He_results$population)
 
-######
-# keep amplicons with high He:
-
-he_amps <- processed_He_results %>%
-  group_by(locus) %>%
-  summarize(mean = mean(post_stat_mean)) %>%
-  arrange(desc(mean))
-
-#keep top n% amplicons with highest He (or use a numeric threshold like > 0.1 of He or whatever... test.)
-perc_25<- round(length(unique(he_amps$locus))*0.95)
-he_amps_top50 <- he_amps[1:perc_25,]
-
-# FILTER
-processed_He_results <- processed_He_results[processed_He_results$locus %in% he_amps_top50$locus,]
-#####
+# ######
+# # keep amplicons with high He:
+# 
+# he_amps <- processed_He_results %>%
+#   group_by(locus) %>%
+#   summarize(mean = mean(post_stat_mean)) %>%
+#   arrange(desc(mean))
+# 
+# #keep top n% amplicons with highest He (or use a numeric threshold like > 0.1 of He or whatever... test.)
+# perc_25<- round(length(unique(he_amps$locus))*0.95)
+# he_amps_top50 <- he_amps[1:perc_25,]
+# 
+# # FILTER
+# processed_He_results <- processed_He_results[processed_He_results$locus %in% he_amps_top50$locus,]
+# #####
 
 
 library(stringr)
@@ -850,6 +865,62 @@ processed_He_results <- processed_He_results %>%
 
 #processed_He_results$population <- gsub("TEST_|_202.*", "", processed_He_results$population)
 #processed_He_results$year <- as.numeric(processed_He_results$year)
+
+write.csv(processed_He_results, "He_DIV_RES.csv", row.names = F)
+
+
+
+
+# Load each RDS file into the list with the file name as the list name
+ALLELE_fREQ_results_list <- list()
+
+for (file in rds_files) {
+  print(file)
+  file_name <- tools::file_path_sans_ext(basename(file))
+  ALLELE_fREQ_results_list[[file_name]] <- readRDS(file)
+}
+
+# Loop through each element in ALLELE_fREQ_results_list
+processed_ALLELE_fREQ_results <- data.frame()
+
+for (i in seq_along(ALLELE_fREQ_results_list)) {
+  
+  # Summarize He
+  ALLELE_fREQ_results <- moire::summarize_allele_freqs(ALLELE_fREQ_results_list[[i]])
+  ALLELE_fREQ_results$population <- names(ALLELE_fREQ_results_list[i])
+  
+  # Add the processed He results to the list
+  processed_ALLELE_fREQ_results <- rbind(processed_ALLELE_fREQ_results, ALLELE_fREQ_results)
+}
+
+#formatting categories
+processed_ALLELE_fREQ_results$population <- gsub("_MOIRE-RESULTS_FOR_ALLELE_FREQS", "", processed_ALLELE_fREQ_results$population)
+
+processed_ALLELE_fREQ_results <- processed_ALLELE_fREQ_results %>%
+  mutate(geo = ifelse(str_detect(population, "North|South|Centre"), "region", "province"))
+
+#processed_ALLELE_fREQ_results$population <- gsub("TEST_|_202.*", "", processed_ALLELE_fREQ_results$population)
+#processed_ALLELE_fREQ_results$year <- as.numeric(processed_ALLELE_fREQ_results$year)
+
+write.csv(processed_ALLELE_fREQ_results, "ALLELE_fREQs_DIV_RES.csv", row.names = F)
+
+##########################################################################################################3
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # 2) calculate heterozygosity of the individual (Hw): 𝐻W = 1 − (n𝑖(1/n𝑖)**2) 
