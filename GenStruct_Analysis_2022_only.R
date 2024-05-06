@@ -409,7 +409,7 @@ sample_size_regions <- combined_df_merged_nodry %>%
   group_by(year, region) %>%
   summarise(unique_NIDA2_count = n_distinct(NIDA2))
 
-sample_size_regions
+sample_size_regions[,2:3]
 
 
 ######################################################################
@@ -1313,7 +1313,11 @@ fit_and_collect_results <- function(reference_population, pop = "region") {
                            random = ~ 1 | locus,
                            data = he_province,
                            na.action = na.omit)
-
+  
+  # Normality check
+  residuals <- resid(he.model.province)
+  shapiro_result <- shapiro.test(residuals)  # Shapiro-Wilk test for normality
+  
   # Extract and return summary statistics
   summary_data <- summary(he.model.province)
   aic <- AIC(logLik(he.model.province))
@@ -1341,7 +1345,8 @@ fit_and_collect_results <- function(reference_population, pop = "region") {
   
   # Combine results
   results <- list(reference_population = reference_population,
-                  t_table = t_table)
+                  t_table = t_table,
+                  shapiro_result = shapiro_result)
   
   return(results)
 }
@@ -1455,6 +1460,7 @@ population_levels <- regions
 results_list_regions <- lapply(regions, fit_and_collect_results, pop = "region")
 results_regions <- analyze_results(results_list_regions, pop = "region")
 
+ggsave("region_He_lmm.png", results_regions[[1]], width = 6, height = 6, bg = "white")
 
 #######################################3
 # 10.- pairwise FST  (https://biology.stackexchange.com/questions/40756/calculating-pairwise-fst-from-allele-frequencies)
